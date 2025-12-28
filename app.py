@@ -492,6 +492,47 @@ st.markdown("""
         }
     }
 
+    /* Dashboard Cards */
+    .kpi-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        padding: 10px 15px;
+        text-align: center;
+        backdrop-filter: blur(10px);
+        margin-bottom: 10px;
+    }
+    
+    .kpi-label {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .kpi-value {
+        color: var(--text-primary);
+        font-size: 1.4rem;
+        font-weight: 700;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    .highlight-success .kpi-value {
+        color: #00E676;
+        text-shadow: 0 0 20px rgba(0, 230, 118, 0.4);
+    }
+    
+    /* Floating Header Styles */
+    .floating-header {
+        background: rgba(10, 14, 39, 0.8);
+        border-bottom: 1px solid var(--glass-border);
+        padding: 10px 0;
+        margin-bottom: 20px;
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        backdrop-filter: blur(20px);
+    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -596,28 +637,54 @@ else:
     st.warning("لم يتم العثور على مجلد assets/gis")
     available_files = []
 
-# لوحة التحكم العلوية - Top Control Panel
-with st.expander("⚙️ عناصر التحكم والتصفية", expanded=True):
-    # تحديد الملف تلقائياً (أول ملف متاح)
-    if available_files:
-        selected_file = available_files[0]  # اختيار أول ملف تلقائياً
-    else:
-        # Fallback: السماح برفع ملف إذا لم توجد ملفات (مفيد للنشر على Cloud)
-        uploaded_file = st.file_uploader("📂 لا توجد ملفات. قم برفع ملف GPKG:", type=['gpkg'])
-        if uploaded_file:
-            # حفظ الملف المرفوع مؤقتاً
-            if not os.path.exists("temp_uploads"):
-                os.makedirs("temp_uploads")
-            temp_path = os.path.join("temp_uploads", uploaded_file.name)
-            with open(temp_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            selected_file = uploaded_file.name
-            ASSETS_PATH = "temp_uploads" # تحديث المسار للملفات المرفوعة
-        else:
-            selected_file = None
-            st.info("💡 يرجى رفع ملف بيانات للبدء.")
+# --- PREMIUM DASHBOARD HEADER ---
+with st.container():
+    st.markdown('<div class="floating-header">', unsafe_allow_html=True)
     
-    if selected_file:
+    # صف الإحصائيات العلوية (KPIs) - فقط إجمالي ومقبول
+    kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns([1.5, 1.5, 3, 2])
+    
+    with kpi_col1:
+        st.markdown(f"""
+        <div class="kpi-card">
+            <div class="kpi-label">إجمالي الطلبات</div>
+            <div class="kpi-value">{len(gdf) if gdf is not None else 0}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with kpi_col2:
+        accepted_count = len(gdf[gdf['survey_review_status'] == 'مقبول']) if gdf is not None else 0
+        st.markdown(f"""
+        <div class="kpi-card highlight-success">
+            <div class="kpi-label">مقبول</div>
+            <div class="kpi-value">{accepted_count}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # عناصر التحكم (تحديد الملف)
+    with kpi_col3:
+        # تحديد الملف تلقائياً (أول ملف متاح)
+        if available_files:
+            selected_file = available_files[0]
+            st.caption(f"📂 الملف الحالي: {selected_file}")
+        else:
+            # Fallback for Cloud
+            uploaded_file = st.file_uploader("📂 رفع ملف GPKG", type=['gpkg'], label_visibility="collapsed")
+            if uploaded_file:
+                if not os.path.exists("temp_uploads"):
+                    os.makedirs("temp_uploads")
+                temp_path = os.path.join("temp_uploads", uploaded_file.name)
+                with open(temp_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                selected_file = uploaded_file.name
+                ASSETS_PATH = "temp_uploads"
+            else:
+                selected_file = None
+                st.info("يرجى رفع ملف")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+if selected_file:
         with st.spinner("⏳ جاري تحميل البيانات..."):
             gdf = load_data(selected_file)
             
@@ -678,25 +745,28 @@ with st.expander("⚙️ عناصر التحكم والتصفية", expanded=Tru
                 if not search_results.empty:
                     filtered_gdf = search_results
                 else:
-                    st.warning("⚠️ لم يتم العثور على نتائج للبحث.")
+                    st.warning("⚠️ لم يتم العثور على نتائج.")
 
-# دليل الألوان (خارج الـ expander - يظهر فوراً)
-st.divider()
-col1, col2, col3, col4 = st.columns(4)
-col1.markdown('<span style="color: white;">🟢 **مقبول**</span>', unsafe_allow_html=True)
-col2.markdown('<span style="color: white;">🔴 **مرفوض للشركة**</span>', unsafe_allow_html=True)
-col3.markdown('<span style="color: white;">🟡 **بانتظار المراجعة**</span>', unsafe_allow_html=True)
-col4.markdown('<span style="color: white;">🔵 **حالات أخرى**</span>', unsafe_allow_html=True)
+# دليل الألوان المختصر (المقبول فقط)
+st.markdown("""
+<div style="display: flex; gap: 20px; justify-content: center; margin: 10px 0;">
+    <span style="color: #00E676; font-weight: bold;">🟢 مقبول</span>
+    <span style="color: #2979FF; font-weight: bold;">🔵 حالات أخرى</span>
+</div>
+""", unsafe_allow_html=True)
 
 # العرض الرئيسي
 if 'filtered_gdf' in locals() and filtered_gdf is not None:
-    # التحقق من اختيار القسم قبل رسم الخريطة
+    # فلترة البيانات لإخفاء المرفوض والتعديلات من الخريطة إذا لزم الأمر
+    # هنا سنقوم بعرض البيانات المفلترة بناءً على اختيارات المستخدم
+    
+    # التحقق من اختيار القسم
     if selected_sec == "عرض الكل":
-        st.info("💡 يرجى اختيار قسم محدد من القائمة الجانبية لعرض الخريطة.")
+        st.info("💡 يرجى اختيار قسم لعرض الخريطة")
     elif len(filtered_gdf) == 0:
-        st.warning("⚠️ لا توجد نتائج تطابق اختياراتك.")
+        st.warning("⚠️ لا توجد نتائج")
     else:
-        # تعريف الـ Fragment لجعل التفاعل محلياً دون إعادة تحميل الصفحة كاملة
+        # تعريف الـ Fragment
         @st.fragment
         def render_interactive_map(filtered_gdf):
             # إعدادات مركز الخريطة والزوم من الـ session_state

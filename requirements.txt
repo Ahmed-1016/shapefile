@@ -1,5 +1,8 @@
-streamlit==1.31.0
-geopandas==0.14.3
-pandas==2.2.0
+streamlit==1.41.0
+geopandas==0.14.2
 leafmap==0.31.0
+pandas==2.2.0
 folium==0.15.1
+streamlit-folium==0.18.0
+pyogrio==0.7.2  # Recommended for faster I/O with geopandas
+Rtree==1.2.0    # For spatial indexing speedup

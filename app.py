@@ -1,74 +1,40 @@
 import streamlit as st
-import os
 import sys
-import subprocess
+import os
 
-st.set_page_config(page_title="GIS System Check")
+st.title("🛡️ Minimal Boot Test")
 
-st.title("🛡️ GIS System Diagnostic")
+st.write("### 1. System Check")
+st.write(f"Python: {sys.version}")
+st.write(f"CWD: {os.getcwd()}")
 
-# 1. System Info
-st.subheader("💻 System Information")
-st.code(f"Python Version: {sys.version}\nPlatform: {sys.platform}\nCWD: {os.getcwd()}")
+st.write("### 2. Library Import Test")
 
-# 2. Check Installed Packages
-st.subheader("📦 Installed Packages (Check)")
-try:
-    result = subprocess.check_output([sys.executable, "-m", "pip", "list"], text=True)
-    with st.expander("Show Pip List"):
-        st.code(result)
-except Exception as e:
-    st.error(f"Could not list packages: {e}")
-
-# 3. Test GIS Libraries
-st.subheader("🧪 Library Integration Test")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.write("**GeoPandas**")
+def test_import(name):
     try:
-        import geopandas as gpd
-        st.success(f"✅ Loaded (v{gpd.__version__})")
+        __import__(name)
+        st.success(f"✅ {name} imported successfully")
+        return True
     except Exception as e:
-        st.error(f"❌ Failed: {e}")
+        st.error(f"❌ {name} failed: {e}")
+        return False
 
-with col2:
-    st.write("**Pyogrio**")
-    try:
-        import pyogrio
-        st.success("✅ Loaded")
-    except Exception as e:
-        st.error(f"❌ Failed: {e}")
+libs = ["pandas", "geopandas", "folium", "streamlit_folium", "pyogrio", "rtree"]
 
-with col3:
-    st.write("**RTree**")
-    try:
-        import rtree
-        st.success("✅ Loaded")
-    except Exception as e:
-        st.error(f"❌ Failed: {e}")
+for lib in libs:
+    test_import(lib)
 
-# 4. Data File Check
-st.subheader("📂 Assets Check")
-paths = ["assets/gis", "gis_assets", ".", ".."]
-for p in paths:
-    full = os.path.abspath(p)
-    if os.path.exists(full):
-        files = os.listdir(full)
-        st.write(f"📁 `{p}` ({full}): {files}")
-    else:
-        st.write(f"❌ `{p}` does not exist")
+st.write("### 3. Data File Discovery")
+path = "assets/gis/13-12-2025.gpkg"
+if os.path.exists(path):
+    size = os.path.getsize(path) / (1024*1024)
+    st.success(f"✅ Found data file: {path} ({size:.2f} MB)")
+else:
+    st.warning(f"⚠️ Data file not found at: {path}")
+    # Search for any gpkg
+    for root, dirs, files in os.walk("."):
+        for file in files:
+            if file.endswith(".gpkg"):
+                st.write(f"Found: {os.path.join(root, file)}")
 
-# 5. Memory Status
-try:
-    import psutil
-    mem = psutil.virtual_memory()
-    st.subheader("📊 Memory Status")
-    st.write(f"Total: {mem.total / (1024**3):.2f} GB")
-    st.write(f"Available: {mem.available / (1024**3):.2f} GB")
-    st.write(f"Used: {mem.percent}%")
-except:
-    st.info("psutil not available")
-
-st.info("If all libraries are ✅ but you still get 'Oh no' when loading the map, it is definitely a RAM issue with the 148MB file.")
+st.info("If you see this page, the environment is healthy. The crash is likely due to RAM exhaustion when loading the full map.")

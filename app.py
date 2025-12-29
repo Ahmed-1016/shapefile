@@ -560,46 +560,52 @@ def load_data(file_name):
         return None
 
     try:
+        # التحقق إذا كان الملف مجرد "Pointer" لـ Git LFS (حجمه صغير جداً)
+        if os.path.getsize(path) < 1000:
+             st.error("⚠️ يبدو أن الملف لم يتم تحميله بالكامل من Git LFS. تأكد من تفعيل LFS في مستودع GitHub.")
+             return None
+
         # تحديد الأعمدة الضرورية فقط لتقليل استهلاك الذاكرة
         essential_columns = [
             'geometry', 'requestnumber', 'gov', 'sec', 'survey_review_status'
         ]
         
-        # قراءة الملف باستخدام geopandas مع محرك pyogrio السريع واختيار الأعمدة
-        gdf = gpd.read_file(path, engine='pyogrio', columns=essential_columns)
+        # محاولة القراءة بمحرك pyogrio السريع أولاً
+        try:
+            gdf = gpd.read_file(path, engine='pyogrio', columns=essential_columns)
+        except Exception:
+            # Fallback للمحرك العادي إذا فشل pyogrio
+            gdf = gpd.read_file(path)
+            # اختيار الأعمدة يدوياً في حالة الـ fallback
+            existing_cols = [c for c in essential_columns if c in gdf.columns]
+            gdf = gdf[existing_cols]
         
-        # التأكد من عدم وجود بيانات مفقودة في العمود الأساسي
+        # تبسيط الأشكال الهندسية لتقليل حجم البيانات المرسلة للمتصفح
+        # (تقليل الدقة بمقدار 0.0001 درجة - حوالي 10 أمتار)
+        gdf['geometry'] = gdf['geometry'].simplify(0.0001, preserve_topology=True)
+
+        # التأكد من وجود عمود الحالة
         if 'survey_review_status' not in gdf.columns:
              gdf['survey_review_status'] = ''
 
-        # حل شامل لمشكلة الـ Timestamp وأي أنواع غير قابلة للتسلسل (JSON serialization)
+        # حل مشكلة الـ Timestamp
         for col in gdf.columns:
-            if col == 'geometry':
-                continue
-            
-            # إذا كان العمود يحتوي على تواريخ أو أوقات
+            if col == 'geometry': continue
             if pd.api.types.is_datetime64_any_dtype(gdf[col]):
                 gdf[col] = gdf[col].dt.strftime('%Y-%m-%d %H:%M:%S')
-            # إذا كان أي كائن آخر غير النصوص والأرقام (مثل Timedelta)
             elif gdf[col].dtype == 'object':
-                # فحص عينة من البيانات للتأكد
-                sample = gdf[col].dropna().iloc[0] if not gdf[col].dropna().empty else None
-                if sample is not None and not isinstance(sample, (str, int, float, bool)):
-                    gdf[col] = gdf[col].astype(str)
+                gdf[col] = gdf[col].astype(str).replace('nan', '')
 
-        # التأكد من نظام الإحداثيات
+        # نظام الإحداثيات
         if gdf.crs is None:
             gdf.set_crs(epsg=4326, inplace=True)
         else:
             gdf = gdf.to_crs(epsg=4326)
             
-        # بناء الفهرس المكاني (Spatial Index) مسبقاً لسرعة البحث
-        # سيتم تخزين الـ GDF كاملاً في الكاش، الـ sindex سيتم إنشاؤه عند الطلب أو حفظه
         _ = gdf.sindex 
-        
         return gdf
     except Exception as e:
-        st.error(f"خطأ أثناء قراءة الملف: {e}")
+        st.error(f"❌ خطأ تقني في قراءة البيانات: {str(e)}")
         return None
 
 # الحصول على قائمة الملفات المتاحة

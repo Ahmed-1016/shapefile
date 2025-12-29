@@ -23,7 +23,7 @@ try:
     import geopandas as gpd
     import pandas as pd
     import folium
-    from folium.plugins import LocateControl, Draw
+    from folium.plugins import LocateControl, Draw, Fullscreen
     from streamlit_folium import st_folium
     import traceback
     from shapely.geometry import shape
@@ -249,6 +249,7 @@ def main():
                     center = [gdf.geometry.centroid.y.mean(), gdf.geometry.centroid.x.mean()]
                     m = folium.Map(location=center, zoom_start=14)
                     LocateControl(auto_start=False).add_to(m)
+                    Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
                     
                     folium.TileLayer(
                         tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
@@ -257,7 +258,13 @@ def main():
                         overlay=False, control=True
                     ).add_to(m)
 
-                    Draw(draw_options={'polyline':False,'circle':False,'marker':False,'rectangle':True,'polygon':True}).add_to(m)
+                    Draw(
+                        draw_options={
+                            'polyline': False, 'circle': False, 'marker': False, 
+                            'circlemarker': False, 'rectangle': True, 'polygon': True
+                        },
+                        edit_options={'edit': False, 'remove': False}
+                    ).add_to(m)
 
                     folium.GeoJson(
                         gdf,

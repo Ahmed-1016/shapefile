@@ -560,9 +560,18 @@ def load_data(file_name):
         return None
 
     try:
-        # قراءة الملف باستخدام geopandas مع محرك pyogrio السريع
-        gdf = gpd.read_file(path, engine='pyogrio')
+        # تحديد الأعمدة الضرورية فقط لتقليل استهلاك الذاكرة
+        essential_columns = [
+            'geometry', 'requestnumber', 'gov', 'sec', 'survey_review_status'
+        ]
         
+        # قراءة الملف باستخدام geopandas مع محرك pyogrio السريع واختيار الأعمدة
+        gdf = gpd.read_file(path, engine='pyogrio', columns=essential_columns)
+        
+        # التأكد من عدم وجود بيانات مفقودة في العمود الأساسي
+        if 'survey_review_status' not in gdf.columns:
+             gdf['survey_review_status'] = ''
+
         # حل شامل لمشكلة الـ Timestamp وأي أنواع غير قابلة للتسلسل (JSON serialization)
         for col in gdf.columns:
             if col == 'geometry':

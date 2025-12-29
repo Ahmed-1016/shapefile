@@ -35,30 +35,30 @@ try:
     from branca.element import MacroElement
     from jinja2 import Template
 
-# --- Map Control Class ---
-    class ClearButton(MacroElement):
-        _template = Template("""
-            {% macro script(this, kwargs) %}
-                var clearBtn = L.Control.extend({
-                    options: { position: 'topright' },
-                    onAdd: function (map) {
-                        var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
-                        container.style.backgroundColor = 'white'; 
-                        container.style.width = '30px'; 
-                        container.style.height = '30px';
-                        container.style.cursor = 'pointer';
-                        container.innerHTML = '<a href="?clear_selection=true" title="محو التحديد" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; text-decoration:none; color:black; font-weight:bold; font-size:18px;">❌</a>';
-                        return container;
-                    }
-                });
-                map.addControl(new clearBtn());
-            {% endmacro %}
-        """)
-
 # --- Config & Setup ---
 except Exception as e:
     st.error(f"❌ خطأ في تحميل المكتبات: {e}")
     st.stop()
+
+# --- Map Control Class ---
+class ClearButton(MacroElement):
+    _template = Template("""
+        {% macro script(this, kwargs) %}
+            var clearBtn = L.Control.extend({
+                options: { position: 'topright' },
+                onAdd: function (map) {
+                    var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+                    container.style.backgroundColor = 'white'; 
+                    container.style.width = '30px'; 
+                    container.style.height = '30px';
+                    container.style.cursor = 'pointer';
+                    container.innerHTML = '<a href="?clear_selection=true" title="محو التحديد" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; text-decoration:none; color:black; font-weight:bold; font-size:18px;">❌</a>';
+                    return container;
+                }
+            });
+            map.addControl(new clearBtn());
+        {% endmacro %}
+    """)
 
 # 3. Custom Premium CSS (Matching Mockup)
 st.markdown("""
@@ -306,7 +306,8 @@ def main():
                                 st.session_state['gov_select'] = target_gov
                                 st.session_state['sec_select'] = target_sec
                                 
-                                # No selection as per request
+                                # Select Request & Show Table (User Request V4.2)
+                                st.session_state.selected_requests = [search_input]
                                 st.session_state.target_req = search_input
                                 st.success(f"تم العثور عليه في: {target_gov}")
                                 

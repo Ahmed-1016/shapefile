@@ -1,2 +1,8 @@
-streamlit==1.41.0
+streamlit
+geopandas
+pyogrio
 pandas
+folium
+streamlit-folium
+rtree
+pyarrow

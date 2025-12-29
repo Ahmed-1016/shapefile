@@ -297,7 +297,18 @@ def main():
                         )
                     ).add_to(m)
 
-                    map_out = st_folium(m, height=520, width='100%', key="main_map")
+                    # Preserve zoom and center if available from previous state
+                    if 'map_center' in st.session_state and 'map_zoom' in st.session_state:
+                        m.location = st.session_state.map_center
+                        m.zoom_start = st.session_state.map_zoom
+                    
+                    map_out = st_folium(m, height=520, width='100%', key="main_map", returned_objects=["last_object_clicked", "all_drawings", "center", "zoom"])
+                    
+                    # Save current map state
+                    if map_out and map_out.get('center'):
+                        st.session_state.map_center = [map_out['center']['lat'], map_out['center']['lng']]
+                    if map_out and map_out.get('zoom'):
+                        st.session_state.map_zoom = map_out['zoom']
 
                     # 3. Handle Map Interaction
                     

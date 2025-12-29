@@ -257,17 +257,9 @@ def main():
                     # Micro-simplification (0.00001 is ~1m). Preserves look, saves RAM.
                     gdf_map['geometry'] = gdf_map['geometry'].simplify(0.00001, preserve_topology=True)
 
-                    # 2. Sidebar Search Sync
-                    all_ids = sorted(gdf_full['requestnumber'].unique().tolist())
-                    with col3:
-                        current_sel = [x for x in st.session_state.selected_requests if x in all_ids]
-                        sidebar_sel = st.multiselect("🔍 بحث بالرقم", options=all_ids, default=current_sel)
-                        if set(sidebar_sel) != set(current_sel):
-                            st.session_state.selected_requests = sidebar_sel
-                            st.rerun()
 
                     center = [gdf_map.geometry.centroid.y.mean(), gdf_map.geometry.centroid.x.mean()]
-                    m = folium.Map(location=center, zoom_start=14, tiles=None)
+                    m = folium.Map(location=center, zoom_start=16, tiles=None)
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
                     

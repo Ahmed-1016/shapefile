@@ -326,8 +326,6 @@ def main():
                                     st.error("❌ صيغة غير صحيحة")
                 
                 
-                else: # Coordinates Search (Removed - Merged into smart search)
-                    pass 
 
             # Selection Info & Clear (Hidden logic, UI via Map Button)
             if st.session_state.selected_requests:

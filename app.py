@@ -274,9 +274,9 @@ def main():
                                 st.session_state['gov_select'] = target_gov
                                 st.session_state['sec_select'] = target_sec
                                 
-                                st.session_state.selected_requests = [search_id]
+                                # No selection as per request
                                 st.session_state.target_req = search_id 
-                                st.session_state.map_id += 1 # Force Map Reset
+                                st.session_state.map_id += 1
                                 st.success(f"تم العثور عليه في: {target_gov}")
                             
                             # 2. If not ID, try Parsing as Coordinates (Lat, Lon)
@@ -316,15 +316,14 @@ def main():
                                                 st.session_state['gov_select'] = t_gov
                                                 st.session_state['sec_select'] = t_sec
                                                 
-                                                # Coordinate Search: Do NOT select request (as per user request)
-                                                # Just redirect to Gov/Sec and Center Map
+                                                # Coordinate Search: Do NOT select request
                                                 st.session_state.custom_center = (search_x, search_y)
                                                 st.session_state.map_id += 1 # Force Map Reset
                                                 st.success(f"📍 إحداثيات صحيحة! موجود في: {t_gov} - {t_sec}")
                                             else:
                                                  st.warning("⚠️ الموقع لا يحتوي على طلبات مسجلة (سيتم التوجيه فقط)")
                                                  st.session_state.custom_center = (search_x, search_y)
-                                                 st.session_state.map_id += 1 # Force Map Reset
+                                                 st.session_state.map_id += 1
                                     else:
                                         st.error("❌ رقم الطلب غير موجود")
                                 except ValueError:
@@ -414,9 +413,8 @@ def main():
                     if "custom_center" in st.session_state:
                          try:
                              cx, cy = st.session_state.custom_center
-                             # Force viewport around pin
-                             # Add a small buffer to create a valid bbox (approx 50m) to ensure Leaflet zooms
-                             delta = 0.0005 
+                             # Add buffer (0.0005) to ensure non-zero bbox for Leaflet
+                             delta = 0.0005
                              m.fit_bounds([[cy - delta, cx - delta], [cy + delta, cx + delta]], max_zoom=19)
                              st.success(f"📍 تم التوجيه للإحداثيات: {cy}, {cx}")
                              del st.session_state.custom_center

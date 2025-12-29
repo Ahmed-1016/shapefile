@@ -174,7 +174,11 @@ def main():
                             'weight': 3 if f['properties'].get('requestnumber') in st.session_state.selected_requests else 1,
                             'fillOpacity': 0.8 if f['properties'].get('requestnumber') in st.session_state.selected_requests else 0.5
                         },
-                        tooltip=folium.GeoJsonTooltip(fields=['requestnumber', 'survey_review_status'], aliases=['الطلب:', 'الحالة:'])
+                        tooltip=folium.GeoJsonTooltip(
+                            fields=['requestnumber', 'survey_review_status', 'accepted_date'],
+                            aliases=['رقم الطلب:', 'الحالة:', 'تاريخ القبول:'],
+                            localize=True
+                        )
                     ).add_to(m)
 
                     st.info("💡 **طرق التحديد المتعدد:** (1) اضغط على الأشكال مباشرة، (2) استخدم أدوات الرسم (المربع) من يسار الخريطة، (3) اختر من قائمة البحث الجانبية.")

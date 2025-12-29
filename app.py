@@ -277,8 +277,14 @@ def main():
                             if not found.empty:
                                 target_gov = found.iloc[0]['gov']
                                 target_sec = found.iloc[0]['sec']
+                                
                                 st.session_state.search_gov = target_gov
                                 st.session_state.search_sec = target_sec
+                                
+                                # Force Widget Update
+                                st.session_state['gov_select'] = target_gov
+                                st.session_state['sec_select'] = target_sec
+                                
                                 st.session_state.selected_requests = [search_id]
                                 st.session_state.target_req = search_id 
                                 st.success(f"تم العثور عليه في: {target_gov}")
@@ -306,12 +312,16 @@ def main():
                                             matches = gpd.read_file(path, engine='pyogrio', bbox=bbox, columns=['gov', 'sec', 'requestnumber'])
                                             
                                             if not matches.empty:
-                                                match = matches.iloc[0]
                                                 t_gov, t_sec = match['gov'], match['sec']
                                                 t_req = match['requestnumber']
                                                 
                                                 st.session_state.search_gov = t_gov
                                                 st.session_state.search_sec = t_sec
+                                                
+                                                # Force Widget Update
+                                                st.session_state['gov_select'] = t_gov
+                                                st.session_state['sec_select'] = t_sec
+                                                
                                                 st.session_state.selected_requests = [str(t_req)]
                                                 st.session_state.target_req = str(t_req)
                                                 st.success(f"📍 إحداثيات صحيحة! موجود في: {t_gov} - {t_sec}")

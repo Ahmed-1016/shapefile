@@ -611,7 +611,12 @@ def load_data(file_name):
         else:
             gdf = gdf.to_crs(epsg=4326)
             
-        _ = gdf.sindex 
+        # بناء الفهرس المكاني (Spatial Index) بأمان
+        try:
+             _ = gdf.sindex 
+        except Exception as si_err:
+             st.sidebar.warning(f"⚠️ Spatial Index warning: {si_err}")
+        
         return gdf
     except Exception as e:
         st.error(f"❌ خطأ تقني في قراءة البيانات: {str(e)}")

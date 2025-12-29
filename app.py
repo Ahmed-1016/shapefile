@@ -217,11 +217,11 @@ def load_map_data(file_name, base_path, gov, sec):
 
 # 6. Main App
 def main():
-    # 0. Handle Query Params for Floating Button
+    # 0. Handle Query Params (Legacy Support - Can be removed)
     if "clear_selection" in st.query_params:
         st.session_state.selected_requests = []
         st.query_params.clear()
-        st.rerun()
+        # st.rerun() # No need to force rerun if we handle via button now
 
     # Top Bar
     st.markdown('<div class="top-header">مستعرض الخرائط (الماسة كونسلت)</div>', unsafe_allow_html=True)
@@ -236,42 +236,45 @@ def main():
     
     target_file = files[0]
 
-    # --- CSS for Integrated Map Button (Overlay Strategy) ---
     st.markdown("""
         <style>
-        .map-overlay {
+        /* Target the specific button by key (partial match or containment) */
+        div[data-testid="stButton"] button {
+             /* Default button styles */
+        }
+        
+        /* Custom class wrapper workaround not possible directly on button, 
+           so we use a container and CSS selector strategy */
+        
+        .overlay-btn-container {
             position: relative;
-            width: 100%;
             height: 0;
-            z-index: 999; /* Above Folium Iframe */
-            pointer-events: none; /* Let clicks pass through empty areas */
+            z-index: 99999;
         }
-        .map-btn-group {
-            position: absolute;
-            top: 60px; /* Below Fullscreen Control (approx) */
-            right: 10px; /* Align with Leaflet controls */
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            pointer-events: auto; /* Re-enable clicks for buttons */
+        
+        div[data-testid="stHorizontalBlock"] .overlay-btn-container button {
+             /* This specific nested button */
+             position: absolute;
+             top: 240px;  /* Below Zoom (70) + Locate (35) + Draw (70) + margins */
+             left: 10px;  /* Left aligned with standard controls */
+             width: 34px !important;
+             height: 34px !important;
+             border-radius: 4px;
+             border: 2px solid rgba(0,0,0,0.2) !important;
+             background-color: white !important;
+             color: #333 !important;
+             box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+             padding: 0 !important;
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             z-index: 99999;
         }
-        .custom-map-btn {
-            background-color: white;
-            width: 34px; /* Match standard Leaflet size */
-            height: 34px;
-            border-radius: 4px;
-            border: 2px solid rgba(0,0,0,0.2);
-            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            font-size: 18px;
-            color: #333;
-            text-decoration: none !important;
-            transition: all 0.2s;
+        div[data-testid="stHorizontalBlock"] .overlay-btn-container button:hover {
+             border-color: #d32f2f !important;
+             color: #d32f2f !important;
+             background-color: #f4f4f4 !important;
         }
-        .custom-map-btn:hover { background-color: #f4f4f4; color: #d32f2f; border-color: #d32f2f; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -531,18 +534,19 @@ def main():
                         )
                     ).add_to(m)
 
-                    # --- OVERLAY BUTTON INJECTION ---
-                    # Visually integrated into the map's control group
+
+
+                    # --- NATIVE STREAMLIT BUTTON OVERLAY ---
+                    # Placed in a zero-height container before map to allow absolute positioning
                     if st.session_state.selected_requests or "custom_marker" in st.session_state or "custom_center" in st.session_state:
-                        st.markdown(f"""
-                        <div class="map-overlay">
-                            <div class="map-btn-group">
-                                <a href="?clear_selection=true" target="_self" class="custom-map-btn" title="مسح التحديد وإعادة الهيئة">
-                                    🗑️
-                                </a>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                         st.markdown('<div class="overlay-btn-container">', unsafe_allow_html=True)
+                         if st.button("🗑️", key="map_clear_btn", help="إلغاء تحديد الأشكال فقط"):
+                             st.session_state.selected_requests = []
+                             # Do NOT clear custom_marker, custom_center, or map_center as per user request
+                             if "last_click" in st.session_state: st.session_state.last_click = None
+                             if "last_draw" in st.session_state: st.session_state.last_draw = None
+                             st.rerun()
+                         st.markdown('</div>', unsafe_allow_html=True)
 
                     map_out = st_folium(m, height=520, width='100%', key="main_map")
 

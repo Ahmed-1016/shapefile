@@ -1,9 +1,9 @@
 import streamlit as st
 import os
 
-# 1. Page Config (Must be first)
+# 1. Page Config
 st.set_page_config(
-    page_title="El Massa Consult - GIS Premium",
+    page_title="El Massa Consult - Smart GIS",
     page_icon="🌍",
     layout="wide"
 )
@@ -25,8 +25,7 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     html, body, [class*="css"] { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }
     .stApp { background-color: #0A1128; color: white; }
-    .stSelectbox label { color: #00E676 !important; font-weight: bold; }
-    .css-1r6slb0 { background-color: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 20px; }
+    [data-testid="stMetricValue"] { color: #00E676; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -40,121 +39,108 @@ def get_assets_path():
 
 ASSETS_PATH = get_assets_path()
 
-# 5. Optimized Data Loading
+# 5. Targeted Loading Logic
 @st.cache_data
-def load_data_safe(file_name, base_path):
+def load_metadata(file_name, base_path):
     path = os.path.join(base_path, file_name)
-    if not os.path.exists(path):
-        return None, f"❌ File not found: {path}"
-    
     try:
-        # Load only essential columns
-        essential = ['geometry', 'requestnumber', 'gov', 'sec', 'survey_review_status']
-        
-        # We use pyogrio with arrow for maximum memory efficiency
-        gdf = gpd.read_file(path, engine='pyogrio', columns=essential, use_arrow=True)
+        # Load ONLY necessary text columns (No Geometry!) - Extremely fast and light
+        df = gpd.read_file(path, engine='pyogrio', columns=['gov', 'sec'], use_arrow=True)
+        return df, None
+    except Exception as e:
+        return None, str(e)
 
-        # Safety valve: 20k rows is roughly the stable limit for streamlit's serialization
-        if len(gdf) > 20000:
-            gdf = gdf.sample(20000)
-            st.sidebar.warning("⚠️ Large dataset: Showing 20,000 sampled records for stability.")
-            
-        # Simplify geometry (0.0001 is ~10m accuracy) - Essential to prevent browser crash
-        gdf['geometry'] = gdf['geometry'].simplify(0.0001, preserve_topology=True)
+@st.cache_data
+def load_section_data(file_name, base_path, gov, sec):
+    path = os.path.join(base_path, file_name)
+    try:
+        # Load only target data using a SQL-like filter via pyogrio (High Performance)
+        where_clause = f"gov = '{gov}' AND sec = '{sec}'"
+        cols = ['geometry', 'requestnumber', 'gov', 'sec', 'survey_review_status']
         
-        # Stringify columns for serialization
-        for col in gdf.columns:
-            if col != 'geometry':
-                gdf[col] = gdf[col].astype(str).replace('nan', '')
+        gdf = gpd.read_file(path, engine='pyogrio', columns=cols, where=where_clause, use_arrow=True)
+        
+        # Aggressive geometry simplification for the browser
+        gdf['geometry'] = gdf['geometry'].simplify(0.0001, preserve_topology=True)
         
         if gdf.crs is None: gdf.set_crs(epsg=4326, inplace=True)
         else: gdf = gdf.to_crs(epsg=4326)
         
         return gdf, None
     except Exception as e:
-        return None, f"❌ Data Error: {str(e)}"
+        return None, str(e)
 
 # 6. Main App
 def main():
-    try:
-        st.title("🌍 El Massa Consult - GIS Platform")
+    st.title("🌍 هضبة الماسة - نظام المعلومات الجغرافية")
+    
+    files = [f for f in os.listdir(ASSETS_PATH) if f.endswith('.gpkg')] if os.path.exists(ASSETS_PATH) else []
+    if not files:
+        st.error("No GIS files detected.")
+        return
+    
+    target_file = files[0]
+    
+    # Phase 1: Load Metadata
+    with st.spinner("⏳ جاري قراءة قواعد البيانات..."):
+        meta_df, err = load_metadata(target_file, ASSETS_PATH)
+    
+    if err:
+        st.error(f"Error reading file structure: {err}")
+        return
+
+    # Phase 2: Sidebar Filters
+    st.sidebar.markdown("### 🔍 تصفية البيانات")
+    
+    govs = sorted(meta_df['gov'].unique())
+    sel_gov = st.sidebar.selectbox("المحافظة", ["إختر المحافظة"] + govs)
+    
+    if sel_gov != "إختر المحافظة":
+        secs = sorted(meta_df[meta_df['gov'] == sel_gov]['sec'].unique())
+        sel_sec = st.sidebar.selectbox("القسم / المركز", ["إختر القسم"] + secs)
         
-        st.sidebar.markdown("### 🛠️ System Status")
-        if st.sidebar.button("🧹 Clear Cache"):
-            st.cache_data.clear()
-            st.rerun()
-
-        files = [f for f in os.listdir(ASSETS_PATH) if f.endswith('.gpkg')] if os.path.exists(ASSETS_PATH) else []
-        
-        if not files:
-            uploaded = st.file_uploader("Upload GPKG", type=['gpkg'])
-            if uploaded:
-                if not os.path.exists("temp"): os.makedirs("temp")
-                save_path = f"temp/{uploaded.name}"
-                with open(save_path, "wb") as f: f.write(uploaded.getbuffer())
-                target_file, target_path = uploaded.name, "temp"
-            else: return
-        else:
-            target_file, target_path = files[0], ASSETS_PATH
-
-        with st.spinner("⏳ Loading Geospatial Intelligence..."):
-            gdf, err = load_data_safe(target_file, target_path)
-        
-        if err:
-            st.error(err)
-            return
-
-        st.sidebar.success(f"✅ Records Loaded: {len(gdf)}")
-
-        # Filters
-        c1, c2 = st.columns(2)
-        with c1:
-            govs = sorted(gdf['gov'].unique()) if 'gov' in gdf.columns else []
-            sel_gov = st.selectbox("اختر المحافظة", ["الكل"] + govs)
-        filtered = gdf if sel_gov == "الكل" else gdf[gdf['gov'] == sel_gov]
-        
-        with c2:
-            secs = sorted(filtered['sec'].unique()) if 'sec' in filtered.columns else []
-            sel_sec = st.selectbox("اختر القسم", ["الكل"] + secs)
-        if sel_sec != "الكل": filtered = filtered[filtered['sec'] == sel_sec]
-
-        st.divider()
-
-        if sel_sec == "الكل" and len(filtered) > 5000:
-            st.info("💡 يرجى اختيار قسماً محدداً لعرض الخريطة التفاعلية")
-            st.dataframe(filtered.drop(columns='geometry').head(100), use_container_width=True)
-        elif not filtered.empty:
-            # Map Rendering
-            center = [filtered.geometry.centroid.y.mean(), filtered.geometry.centroid.x.mean()]
-            m = folium.Map(location=center, zoom_start=14)
+        if sel_sec != "إختر القسم":
+            # Phase 3: Targeted Data Loading
+            with st.spinner(f"⏳ جاري تحميل بيانات {sel_sec}..."):
+                gdf, load_err = load_section_data(target_file, ASSETS_PATH, sel_gov, sel_sec)
             
-            # Google Hybrid Tile
-            google_hybrid = "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
-            folium.TileLayer(
-                tiles=google_hybrid,
-                attr="Google Satellite",
-                name="Satellite View",
-                overlay=False,
-                control=True
-            ).add_to(m)
+            if load_err:
+                st.error(f"Error loading section: {load_err}")
+            elif not gdf.empty:
+                st.sidebar.success(f"✅ تم تحميل {len(gdf)} سجل")
+                
+                # Map
+                center = [gdf.geometry.centroid.y.mean(), gdf.geometry.centroid.x.mean()]
+                m = folium.Map(location=center, zoom_start=13)
+                
+                # Google Satellite Hybrid Layer
+                google_hybrid = "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                folium.TileLayer(
+                    tiles=google_hybrid,
+                    attr="Google Satellite",
+                    name="Satellite View",
+                    overlay=False,
+                    control=True
+                ).add_to(m)
 
-            folium.GeoJson(
-                filtered,
-                style_function=lambda f: {
-                    'fillColor': '#00E676' if 'مقبول' in str(f['properties'].get('survey_review_status')) else '#FF1744',
-                    'color': 'white', 'weight': 1, 'fillOpacity': 0.5
-                },
-                tooltip=folium.GeoJsonTooltip(fields=['requestnumber', 'survey_review_status'], aliases=['طلب رقم:', 'الحالة:'])
-            ).add_to(m)
-            
-            st_folium(m, height=600, width='100%')
-            st.dataframe(filtered.drop(columns='geometry'), use_container_width=True)
+                folium.GeoJson(
+                    gdf,
+                    style_function=lambda f: {
+                        'fillColor': '#00E676' if 'مقبول' in str(f['properties'].get('survey_review_status')) else '#FF1744',
+                        'color': 'white', 'weight': 1, 'fillOpacity': 0.5
+                    },
+                    tooltip=folium.GeoJsonTooltip(fields=['requestnumber', 'survey_review_status'], aliases=['رقم الطلب:', 'الحالة:'])
+                ).add_to(m)
+                
+                st_folium(m, height=600, width='100%')
+                st.write("---")
+                st.dataframe(gdf.drop(columns='geometry'), use_container_width=True)
+            else:
+                st.warning("⚠️ لا توجد بيانات لهذا التقسيم")
         else:
-            st.warning("⚠️ لا توجد بيانات مطابقة للمواصفات")
-
-    except Exception as e:
-        st.error("🚨 Critical System Failure")
-        st.code(traceback.format_exc())
+            st.info("👈 يرجى اختيار القسم لعرض الخريطة")
+    else:
+        st.info("👈 ابدأ باختيار المحافظة من القائمة الجانبية")
 
 if __name__ == "__main__":
     main()

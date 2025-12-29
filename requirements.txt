@@ -1,5 +1,8 @@
-streamlit==1.41.0
-geopandas==1.0.1
+streamlit
 pandas
+geopandas
+pyproj
+rtree
+pyogrio
 folium
 streamlit-folium

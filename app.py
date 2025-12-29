@@ -1,32 +1,45 @@
 import streamlit as st
-import geopandas as gpd
-import pandas as pd
 import os
 
-st.title("🚀 Baseline Environment Test")
+st.set_page_config(page_title="GIS Safe Boot")
 
-st.success("If you see this, the core libraries (Streamlit, Geopandas) are loaded!")
+st.title("🛡️ GIS Service - Safe Boot")
 
-st.write("### Environment Details")
-st.write(f"CWD: {os.getcwd()}")
+st.write("This application is currently in **Safe Boot Mode** to diagnose deployment issues.")
 
-# Test Data access
-path = "assets/gis/13-12-2025.gpkg"
-if os.path.exists(path):
-    st.write(f"✅ Data file found: {path}")
-    st.write(f"Size: {os.path.getsize(path)/(1024*1024):.1f} MB")
-else:
-    st.error("❌ Data file NOT found. Searching...")
-    for root, dirs, files in os.walk("."):
-        for f in files:
-            if f.endswith(".gpkg"):
-                st.write(f"Found at: {os.path.join(root, f)}")
+st.info("If you see this message, the basic Streamlit server is running correctly.")
 
-if st.button("Run Memory Intensive Test (Load GDF)"):
-    try:
-        with st.spinner("Loading 148MB file..."):
-            gdf = gpd.read_file(path)
-            st.write(f"✅ Success! Loaded {len(gdf)} rows.")
-            st.dataframe(gdf.head(10))
-    except Exception as e:
-        st.error(f"❌ Failed to load: {e}")
+st.sidebar.markdown("### 🔍 Diagnostics")
+st.sidebar.write(f"CWD: {os.getcwd()}")
+
+# Check for data files
+st.write("### 📂 Data Check")
+found_gpkg = False
+for root, dirs, files in os.walk("."):
+    for file in files:
+        if file.endswith(".gpkg"):
+            size = os.path.getsize(os.path.join(root, file)) / (1024 * 1024)
+            st.write(f"✅ Found: `{os.path.join(root, file)}` ({size:.2f} MB)")
+            found_gpkg = True
+
+if not found_gpkg:
+    st.error("❌ No .gpkg files found in the repository.")
+
+# Delayed Import Test
+if st.button("🧪 Test GIS Libraries"):
+    with st.spinner("Importing GeoPandas..."):
+        try:
+            import geopandas as gpd
+            st.success(f"✅ GeoPandas {gpd.__version__} loaded successfully!")
+        except Exception as e:
+            st.error(f"❌ GeoPandas failed: {e}")
+            
+    with st.spinner("Importing Folium..."):
+        try:
+            import folium
+            st.success("✅ Folium loaded successfully!")
+        except Exception as e:
+            st.error(f"❌ Folium failed: {e}")
+
+st.write("---")
+st.warning("If the app crashes AFTER clicking the test button, the issue is a library conflict or RAM limit.")

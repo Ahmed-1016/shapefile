@@ -45,20 +45,22 @@ class ClearButton(MacroElement):
     _template = Template("""
         {% macro script(this, kwargs) %}
             var clearBtn = L.Control.extend({
-                options: { position: 'topright' },
+                options: { position: 'topleft' },
                 onAdd: function (map) {
                     var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
                     container.style.backgroundColor = 'white'; 
                     container.style.width = '30px'; 
                     container.style.height = '30px';
+                    container.style.marginTop = '80px';
                     container.style.cursor = 'pointer';
-                    container.innerHTML = '<a href="?clear_selection=true" title="محو التحديد" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; text-decoration:none; color:black; font-weight:bold; font-size:18px;">❌</a>';
+                    container.innerHTML = '<a href="?clear_selection=true" title="محو التحديد" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; text-decoration:none; color:black; font-weight:bold; font-size:18px;">🗑️</a>';
                     return container;
                 }
             });
             map.addControl(new clearBtn());
         {% endmacro %}
     """)
+
 
 # 3. Custom Premium CSS (Matching Mockup)
 st.markdown("""
@@ -199,6 +201,10 @@ def load_map_data(file_name, base_path, gov, sec):
 
     if gdf.crs is None: gdf.set_crs(epsg=4326, inplace=True)
     else: gdf = gdf.to_crs(epsg=4326)
+    
+    # Ensure ID match consistency
+    gdf['requestnumber'] = gdf['requestnumber'].astype(str)
+    
     gdf['status_color'] = gdf['survey_review_status'].apply(get_color)
 
     # JSON Cleanup for Dates
@@ -450,10 +456,10 @@ def main():
                             # Update Persistent Center
                             st.session_state.map_center = [geom.centroid.y, geom.centroid.x]
                             center = st.session_state.map_center
-                            zoom = 19
+                            zoom = 21
                         st.session_state.target_req = None
 
-                    m = folium.Map(location=center, zoom_start=zoom, tiles=None)
+                    m = folium.Map(location=center, zoom_start=zoom, tiles=None, max_zoom=22)
 
                     # Apply Fit Bounds (Must be after map init)
                     if "custom_center" in st.session_state:
@@ -461,7 +467,7 @@ def main():
                              cx, cy = st.session_state.custom_center
                              # Add buffer (0.0005) to ensure non-zero bbox for Leaflet
                              delta = 0.0005
-                             m.fit_bounds([[cy - delta, cx - delta], [cy + delta, cx + delta]], max_zoom=19)
+                             m.fit_bounds([[cy - delta, cx - delta], [cy + delta, cx + delta]], max_zoom=21)
                              st.success(f"📍 تم التوجيه للإحداثيات: {cy}, {cx}")
                              del st.session_state.custom_center
                          except Exception as e:
@@ -477,7 +483,7 @@ def main():
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
                     
-                    # Add Clear Selection Button (Custom Control)
+                    # Add Clear Selection Button (Custom Control) 
                     if st.session_state.selected_requests or "custom_marker" in st.session_state or "custom_center" in st.session_state:
                          ClearButton().add_to(m)
                     
@@ -486,6 +492,7 @@ def main():
                         tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
                         attr="Google Satellite",
                         name="Satellite View",
+                        max_zoom=22,
                         overlay=False, 
                         control=False  # Hide layer control since we only have one layer
                     ).add_to(m)
@@ -502,9 +509,9 @@ def main():
                         gdf_map,
                         style_function=lambda f: {
                             'fillColor': f['properties'].get('status_color'),
-                            'color': '#00B0FF' if f['properties'].get('requestnumber') in st.session_state.selected_requests else 'white',
-                            'weight': 3 if f['properties'].get('requestnumber') in st.session_state.selected_requests else 1,
-                            'fillOpacity': 0.7
+                            'color': '#00E5FF' if str(f['properties'].get('requestnumber')) in st.session_state.selected_requests else 'white',
+                            'weight': 5 if str(f['properties'].get('requestnumber')) in st.session_state.selected_requests else 1,
+                            'fillOpacity': 0.9 if str(f['properties'].get('requestnumber')) in st.session_state.selected_requests else 0.7
                         },
                         tooltip=folium.GeoJsonTooltip(
                             fields=['requestnumber', 'survey_review_status', 'accepted_date'],

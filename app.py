@@ -71,7 +71,7 @@ def load_map_data(file_name, base_path, gov, sec):
     path = os.path.join(base_path, file_name)
     where = f"gov = '{gov}' AND sec = '{sec}'"
     gdf = gpd.read_file(path, engine='pyogrio', where=where, use_arrow=True)
-    gdf['geometry'] = gdf['geometry'].simplify(0.0001, preserve_topology=True)
+    
     if gdf.crs is None: gdf.set_crs(epsg=4326, inplace=True)
     else: gdf = gdf.to_crs(epsg=4326)
     gdf['status_color'] = gdf['survey_review_status'].apply(get_color)

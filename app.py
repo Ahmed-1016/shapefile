@@ -7,7 +7,7 @@ VERSION = "2.4.0 (Premium Redesign)"
 # 1. Page Config
 st.set_page_config(
     page_title="El Massa Consult - Shapefile View",
-    page_icon="🟢",
+    page_icon="🌍",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -215,11 +215,10 @@ def main():
             
             with col3:
                 # Search / Multi-select
-                search_options = []
+                # Check for updates and sync Sidebar selections
                 if sel_gov != "عرض الكل" and sel_sec != "عرض الكل":
-                    # We'll load full data only if needed for IDs to save memory/speed
-                    # For ID list, it's better to stay lightweight
-                    search_options = ["...جاري التحميل"]
+                    # Lazy loading for large dropdown
+                    pass
                 
                 selected_ids = st.multiselect("🔍 بحث (رقم الطلب...)", options=st.session_state.selected_requests + ["..."])
 
@@ -247,12 +246,6 @@ def main():
                     gdf = load_map_data(target_file, ASSETS_PATH, sel_gov, sel_sec)
                 
                 if not gdf.empty:
-                    # Update search options with real IDs
-                    all_ids = sorted(gdf['requestnumber'].unique().tolist())
-                    # Note: We can't easily update the multiselect options after it's rendered, 
-                    # but we can rely on Session State sync if we put logic better. 
-                    # For now, keeping it simple.
-
                     center = [gdf.geometry.centroid.y.mean(), gdf.geometry.centroid.x.mean()]
                     m = folium.Map(location=center, zoom_start=14)
                     LocateControl(auto_start=False).add_to(m)
@@ -293,8 +286,6 @@ def main():
                             else: curr.append(req)
                             st.session_state.selected_requests = curr
                             st.rerun()
-
-                    # Drawing logic (Spatial) omitted for brevity in this UI pass but logic remains same
 
                     # Table
                     if st.session_state.selected_requests:

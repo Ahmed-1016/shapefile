@@ -551,13 +551,17 @@ FIELD_NAMES_AR = {
 @st.cache_data
 def load_data(file_name):
     path = os.path.join(ASSETS_PATH, file_name)
-    if not os.path.exists(path):
-        st.error(f"الملف غير موجود: {path}")
+    # التحقق من وجود الملف وحجمه قبل القراءة
+    if os.path.exists(path):
+        size_mb = os.path.getsize(path) / (1024 * 1024)
+        st.write(f"📁 تحميل الملف: {file_name} ({size_mb:.1f} MB)")
+    else:
+        st.error(f"❌ الملف غير موجود في المسار: {path}")
         return None
-    
+
     try:
-        # قراءة الملف باستخدام geopandas
-        gdf = gpd.read_file(path)
+        # قراءة الملف باستخدام geopandas مع محرك pyogrio السريع
+        gdf = gpd.read_file(path, engine='pyogrio')
         
         # حل شامل لمشكلة الـ Timestamp وأي أنواع غير قابلة للتسلسل (JSON serialization)
         for col in gdf.columns:

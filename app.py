@@ -168,6 +168,17 @@ def load_map_data(file_name, base_path, gov, sec):
     else: gdf = gdf.to_crs(epsg=4326)
     gdf['status_color'] = gdf['survey_review_status'].apply(get_color)
 
+    # Memory Optimization: Drop heavy columns for the map view (keeps only what tooltip needs)
+    # This significantly reduces the size of the GeoJSON generated for Folium
+    keep_cols = ['requestnumber', 'survey_review_status', 'accepted_date', 'status_color', 'geometry']
+    # If any columns are missing, we don't crash
+    existing_cols = [c for c in keep_cols if c in gdf.columns]
+    gdf = gdf[existing_cols].copy()
+
+    # Micro-simplification (0.00001 degrees is ~1 meter). 
+    # This prevents ArrayMemoryError on Streamlit Cloud while looking sharp.
+    gdf['geometry'] = gdf['geometry'].simplify(0.00001, preserve_topology=True)
+
     # JSON Cleanup for Dates
     for col in gdf.columns:
         if pd.api.types.is_datetime64_any_dtype(gdf[col]) or gdf[col].dtype == object:
@@ -243,10 +254,26 @@ def main():
             # --- Map Processing ---
             if sel_gov != "عرض الكل" and sel_sec != "عرض الكل":
                 with st.spinner("⏳ جاري تحليل خرائط القسم..."):
-                    gdf = load_map_data(target_file, ASSETS_PATH, sel_gov, sel_sec)
+                    gdf_full = load_map_data(target_file, ASSETS_PATH, sel_gov, sel_sec)
                 
-                if not gdf.empty:
-                    center = [gdf.geometry.centroid.y.mean(), gdf.geometry.centroid.x.mean()]
+                if not gdf_full.empty:
+                    # 1. Memory Optimization for Folium
+                    # We create a lightweight copy ONLY for the map to prevent ArrayMemoryError
+                    keep_map_cols = ['requestnumber', 'survey_review_status', 'accepted_date', 'status_color', 'geometry']
+                    gdf_map = gdf_full[[c for c in keep_map_cols if c in gdf_full.columns]].copy()
+                    # Micro-simplification (0.00001 is ~1m). Preserves look, saves RAM.
+                    gdf_map['geometry'] = gdf_map['geometry'].simplify(0.00001, preserve_topology=True)
+
+                    # 2. Sidebar Search Sync
+                    all_ids = sorted(gdf_full['requestnumber'].unique().tolist())
+                    with col3:
+                        current_sel = [x for x in st.session_state.selected_requests if x in all_ids]
+                        sidebar_sel = st.multiselect("🔍 بحث بالرقم", options=all_ids, default=current_sel)
+                        if set(sidebar_sel) != set(current_sel):
+                            st.session_state.selected_requests = sidebar_sel
+                            st.rerun()
+
+                    center = [gdf_map.geometry.centroid.y.mean(), gdf_map.geometry.centroid.x.mean()]
                     m = folium.Map(location=center, zoom_start=14)
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
@@ -267,7 +294,7 @@ def main():
                     ).add_to(m)
 
                     folium.GeoJson(
-                        gdf,
+                        gdf_map,
                         style_function=lambda f: {
                             'fillColor': f['properties'].get('status_color'),
                             'color': '#00B0FF' if f['properties'].get('requestnumber') in st.session_state.selected_requests else 'white',
@@ -282,22 +309,22 @@ def main():
 
                     map_out = st_folium(m, height=520, width='100%', key="main_map")
 
-                    # Handle Click Interaction
+                    # 3. Handle Map Interaction
                     new_click = map_out.get("last_object_clicked")
                     if new_click and new_click != st.session_state.last_click:
                         st.session_state.last_click = new_click
                         if "properties" in new_click and "requestnumber" in new_click["properties"]:
                             req = new_click["properties"]["requestnumber"]
-                            curr = list(st.session_state.selected_requests)
-                            if req in curr: curr.remove(req)
-                            else: curr.append(req)
-                            st.session_state.selected_requests = curr
+                            curr_list = list(st.session_state.selected_requests)
+                            if req in curr_list: curr_list.remove(req)
+                            else: curr_list.append(req)
+                            st.session_state.selected_requests = curr_list
                             st.rerun()
 
                     # Table
                     if st.session_state.selected_requests:
                         st.subheader("📋 بيانات الطلبات المختارة")
-                        display_df = gdf[gdf['requestnumber'].isin(st.session_state.selected_requests)]
+                        display_df = gdf_full[gdf_full['requestnumber'].isin(st.session_state.selected_requests)]
                         st.dataframe(display_df.drop(columns=['geometry', 'status_color']), use_container_width=True, hide_index=True)
                 else:
                     st.warning("لا توجد بيانات لهذا القسم.")

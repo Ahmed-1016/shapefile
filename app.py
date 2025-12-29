@@ -253,78 +253,80 @@ def main():
             with col3:
                 # GLOBAL SEARCH (Smart: ID OR Coords)
                 # User requested single search box handling both
-                c_search, c_btn = st.columns([3, 1])
-                with c_search:
-                    search_id = st.text_input("بحث (رقم طلب / إحداثيات)", placeholder="رقم أو Lat,Lon...", label_visibility="collapsed", key="global_smart_search")
-                with c_btn:
-                    if st.button("بحث", key="btn_smart_search"):
-                        if search_id:
-                            # Search in META data globally
-                            # 1. Try by Request Number
-                            found = meta_df[meta_df['requestnumber'] == search_id]
+                with st.form("global_search_form"):
+                    c_search, c_btn = st.columns([3, 1])
+                    with c_search:
+                        search_id = st.text_input("بحث (رقم طلب / إحداثيات)", placeholder="رقم أو Lat,Lon...", label_visibility="collapsed", key="global_smart_search")
+                    with c_btn:
+                        submitted = st.form_submit_button("بحث")
+                    
+                    if submitted and search_id:
+                        # Search in META data globally
+                        # 1. Try by Request Number
+                        found = meta_df[meta_df['requestnumber'] == search_id]
+                        
+                        if not found.empty:
+                            target_gov = found.iloc[0]['gov']
+                            target_sec = found.iloc[0]['sec']
                             
-                            if not found.empty:
-                                target_gov = found.iloc[0]['gov']
-                                target_sec = found.iloc[0]['sec']
-                                
-                                st.session_state.search_gov = target_gov
-                                st.session_state.search_sec = target_sec
-                                
-                                # Force Widget Update
-                                st.session_state['gov_select'] = target_gov
-                                st.session_state['sec_select'] = target_sec
-                                
-                                # No selection as per request
-                                st.session_state.target_req = search_id 
-                                st.success(f"تم العثور عليه في: {target_gov}")
+                            st.session_state.search_gov = target_gov
+                            st.session_state.search_sec = target_sec
                             
-                            # 2. If not ID, try Parsing as Coordinates (Lat, Lon)
-                            else:
-                                try:
-                                    # Clean input
-                                    clean_id = search_id.replace(',', ' ').strip()
-                                    parts = clean_id.split()
-                                    if len(parts) >= 2:
-                                        # Assume Lat, Lon as per user example (31.208638, 30.059425) -> Y, X
-                                        in_lat, in_lon = float(parts[0]), float(parts[1])
+                            # Force Widget Update
+                            st.session_state['gov_select'] = target_gov
+                            st.session_state['sec_select'] = target_sec
+                            
+                            # No selection as per request
+                            st.session_state.target_req = search_id 
+                            st.success(f"تم العثور عليه في: {target_gov}")
+                        
+                        # 2. If not ID, try Parsing as Coordinates (Lat, Lon)
+                        else:
+                            try:
+                                # Clean input
+                                clean_id = search_id.replace(',', ' ').strip()
+                                parts = clean_id.split()
+                                if len(parts) >= 2:
+                                    # Assume Lat, Lon as per user example (31.208638, 30.059425) -> Y, X
+                                    in_lat, in_lon = float(parts[0]), float(parts[1])
+                                    
+                                    # GeoPackage is EPSG:4326 (Lon, Lat) -> (X, Y)
+                                    search_x, search_y = in_lon, in_lat
+                                    
+                                    # Create BBox for spatial query (buffer 0.0005 deg ~ 50m to catch nearby)
+                                    # User asked for "approximate" location / close requests
+                                    buffer = 0.0005
+                                    bbox = (search_x - buffer, search_y - buffer, search_x + buffer, search_y + buffer)
+                                    
+                                    with st.spinner("⏳ جاري الكشف عن موقع الإحداثيات..."):
+                                        path = os.path.join(ASSETS_PATH, target_file)
+                                        # Read ONLY gov, sec intersecting bbox
+                                        matches = gpd.read_file(path, engine='pyogrio', bbox=bbox, columns=['gov', 'sec', 'requestnumber'])
                                         
-                                        # GeoPackage is EPSG:4326 (Lon, Lat) -> (X, Y)
-                                        search_x, search_y = in_lon, in_lat
-                                        
-                                        # Create BBox for spatial query (buffer 0.0005 deg ~ 50m to catch nearby)
-                                        # User asked for "approximate" location / close requests
-                                        buffer = 0.0005
-                                        bbox = (search_x - buffer, search_y - buffer, search_x + buffer, search_y + buffer)
-                                        
-                                        with st.spinner("⏳ جاري الكشف عن موقع الإحداثيات..."):
-                                            path = os.path.join(ASSETS_PATH, target_file)
-                                            # Read ONLY gov, sec intersecting bbox
-                                            matches = gpd.read_file(path, engine='pyogrio', bbox=bbox, columns=['gov', 'sec', 'requestnumber'])
-                                            
-                                            st.session_state.custom_marker = [search_y, search_x] # [Lat, Lon] for Marker
+                                        st.session_state.custom_marker = [search_y, search_x] # [Lat, Lon] for Marker
 
-                                            if not matches.empty:
-                                                match = matches.iloc[0]
-                                                t_gov, t_sec = match['gov'], match['sec']
-                                                t_req = match['requestnumber']
-                                                
-                                                st.session_state.search_gov = t_gov
-                                                st.session_state.search_sec = t_sec
-                                                
-                                                # Force Widget Update
-                                                st.session_state['gov_select'] = t_gov
-                                                st.session_state['sec_select'] = t_sec
-                                                
-                                                # Coordinate Search: Do NOT select request
-                                                st.session_state.custom_center = (search_x, search_y)
-                                                st.success(f"📍 إحداثيات صحيحة! موجود في: {t_gov} - {t_sec}")
-                                            else:
-                                                 st.warning("⚠️ الموقع لا يحتوي على طلبات مسجلة (سيتم التوجيه فقط)")
-                                                 st.session_state.custom_center = (search_x, search_y)
-                                    else:
-                                        st.error("❌ رقم الطلب غير موجود")
-                                except ValueError:
-                                    st.error("❌ صيغة غير صحيحة")
+                                        if not matches.empty:
+                                            match = matches.iloc[0]
+                                            t_gov, t_sec = match['gov'], match['sec']
+                                            t_req = match['requestnumber']
+                                            
+                                            st.session_state.search_gov = t_gov
+                                            st.session_state.search_sec = t_sec
+                                            
+                                            # Force Widget Update
+                                            st.session_state['gov_select'] = t_gov
+                                            st.session_state['sec_select'] = t_sec
+                                            
+                                            # Coordinate Search: Do NOT select request
+                                            st.session_state.custom_center = (search_x, search_y)
+                                            st.success(f"📍 إحداثيات صحيحة! موجود في: {t_gov} - {t_sec}")
+                                        else:
+                                             st.warning("⚠️ الموقع لا يحتوي على طلبات مسجلة (سيتم التوجيه فقط)")
+                                             st.session_state.custom_center = (search_x, search_y)
+                                else:
+                                    st.error("❌ رقم الطلب غير موجود")
+                            except ValueError:
+                                st.error("❌ صيغة غير صحيحة")
 
             with col1:
                 sel_gov = st.selectbox("🏛️ المحافظة", ["عرض الكل"] + govs, index=0 if "search_gov" not in st.session_state else (govs.index(st.session_state.search_gov) + 1 if st.session_state.search_gov in govs else 0), key="gov_select")

@@ -2,7 +2,7 @@ import streamlit as st
 import os
 
 # --- APP VERSION ---
-VERSION = "2.0.1 (Premium - Full Features)"
+VERSION = "2.1.0 (Multi-Select Edition)"
 
 # 1. Page Config
 st.set_page_config(
@@ -10,6 +10,10 @@ st.set_page_config(
     page_icon="🌍",
     layout="wide"
 )
+
+# Initialize Session State for Multi-Select
+if 'selected_requests' not in st.session_state:
+    st.session_state.selected_requests = set()
 
 # 2. Lazy Imports
 try:
@@ -23,7 +27,7 @@ except Exception as e:
     st.error(f"❌ خطأ في تحميل المكتبات: {e}")
     st.stop()
 
-# 3. Custom CSS for Right-to-Left and Styling
+# 3. Custom CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
@@ -38,16 +42,16 @@ st.markdown("""
     }
     .legend-item { display: flex; align-items: center; margin-bottom: 8px; gap: 12px; font-size: 0.9em; }
     .dot { height: 14px; width: 14px; border-radius: 3px; display: inline-block; border: 1px solid white; }
-    .version-tag { font-size: 0.8em; color: gray; text-align: left; }
+    .stMetric { background: rgba(0, 230, 118, 0.1); border-radius: 10px; padding: 10px; border: 1px solid #00E676; }
 </style>
 """, unsafe_allow_html=True)
 
 # 4. Helpers
 def get_color(status):
     status = str(status)
-    if 'مقبول' in status: return '#00E676'  # Green
-    if 'مرفوض' in status or 'ملغى' in status: return '#FF1744'  # Red
-    return '#FFEA00'  # Yellow (Neutral/Review)
+    if 'مقبول' in status: return '#00E676'
+    if 'مرفوض' in status or 'ملغى' in status: return '#FF1744'
+    return '#FFEA00'
 
 def get_assets_path():
     possible = ["assets/gis", ".", "gis_service/assets/gis"]
@@ -58,12 +62,11 @@ def get_assets_path():
 
 ASSETS_PATH = get_assets_path()
 
-# 5. Data Loading (Targeted & Efficient)
+# 5. Data Loading
 @st.cache_data(ttl=3600)
 def load_meta(file_name, base_path):
     path = os.path.join(base_path, file_name)
-    df = gpd.read_file(path, engine='pyogrio', columns=['gov', 'sec'], use_arrow=True)
-    return df
+    return gpd.read_file(path, engine='pyogrio', columns=['gov', 'sec'], use_arrow=True)
 
 @st.cache_data(ttl=3600)
 def load_map_data(file_name, base_path, gov, sec):
@@ -71,50 +74,48 @@ def load_map_data(file_name, base_path, gov, sec):
     where = f"gov = '{gov}' AND sec = '{sec}'"
     cols = ['geometry', 'requestnumber', 'gov', 'sec', 'survey_review_status']
     gdf = gpd.read_file(path, engine='pyogrio', columns=cols, where=where, use_arrow=True)
-    
-    # Aggressive simplification for rendering performance
     gdf['geometry'] = gdf['geometry'].simplify(0.0001, preserve_topology=True)
-    
     if gdf.crs is None: gdf.set_crs(epsg=4326, inplace=True)
     else: gdf = gdf.to_crs(epsg=4326)
-    
-    # Add status_color for easy access
     gdf['status_color'] = gdf['survey_review_status'].apply(get_color)
     return gdf
 
 # 6. Main App
 def main():
-    # Sidebar Header
     st.sidebar.markdown(f"### 🌍 El Massa GIS")
-    st.sidebar.markdown(f'<p class="version-tag">Version: {VERSION}</p>', unsafe_allow_html=True)
+    st.sidebar.markdown(f"**إصدار التحديد المتعدد: {VERSION}**")
     
-    if st.sidebar.button("🔄 تحديث إجباري للبيانات"):
+    if st.sidebar.button("🔄 تحديث شامل واعادة تعيين"):
         st.cache_data.clear()
+        st.session_state.selected_requests = set()
         st.rerun()
 
-    st.title("🌐 نظام المعلومات الجغرافية - الماسة كونسلت")
+    if st.session_state.selected_requests:
+        if st.sidebar.button("🗑️ مسح التحديد الحالي"):
+            st.session_state.selected_requests = set()
+            st.rerun()
+
+    st.title("🌐 نظام التحديد المتعدد للخرائط - هضبة الماسة")
 
     files = [f for f in os.listdir(ASSETS_PATH) if f.endswith('.gpkg')] if os.path.exists(ASSETS_PATH) else []
     if not files:
-        st.error("⚠️ لم يتم العثور على ملفات الخرائط في المسار المحدد.")
-        st.info(f"المسار الحالي: {os.path.abspath(ASSETS_PATH)}")
+        st.error("⚠️ لم يتم العثور على ملفات.")
         return
     
     target_file = files[0]
 
-    # Legend
+    # Legend Sidebar
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### 🎨 مفتاح الحالات")
     st.sidebar.markdown(f"""
     <div class="legend-box">
-        <div class="legend-item"><span class="dot" style="background:#00E676"></span> تم القبول (Accepted)</div>
-        <div class="legend-item"><span class="dot" style="background:#FFEA00"></span> قيد المراجعة (Review)</div>
-        <div class="legend-item"><span class="dot" style="background:#FF1744"></span> مرفوض / ملغى (Rejected)</div>
+        <div class="legend-item"><span class="dot" style="background:#00E676"></span> تم القبول</div>
+        <div class="legend-item"><span class="dot" style="background:#FFEA00"></span> قيد المراجعة</div>
+        <div class="legend-item"><span class="dot" style="background:#FF1744"></span> مرفوض / ملغى</div>
     </div>
     """, unsafe_allow_html=True)
 
     try:
-        # Step 1: Meta selection
         meta_df = load_meta(target_file, ASSETS_PATH)
         govs = sorted(meta_df['gov'].unique())
         sel_gov = st.sidebar.selectbox("اختر المحافظة", ["-- اختر --"] + govs)
@@ -124,73 +125,68 @@ def main():
             sel_sec = st.sidebar.selectbox(f"اختر القسم في {sel_gov}", ["-- اختر --"] + secs)
             
             if sel_sec != "-- اختر --":
-                # Step 2: Load targeted data
-                with st.spinner(f"⏳ جاري تحميل خرائط {sel_sec}..."):
+                with st.spinner("⏳ جاري تحميل البيانات..."):
                     gdf = load_map_data(target_file, ASSETS_PATH, sel_gov, sel_sec)
                 
                 if not gdf.empty:
-                    # Map Setup
+                    # Metrics Row
+                    c1, c2, c3 = st.columns(3)
+                    with c1: st.metric("إجمالي الطلبات في القسم", len(gdf))
+                    with c2: st.metric("الطلبات المختارة", len(st.session_state.selected_requests))
+                    with c3:
+                        accepted = len(gdf[gdf['status_color'] == '#00E676'])
+                        st.metric("تم القبول", f"{accepted} ({int(accepted/max(len(gdf),1)*100)}%)")
+
+                    # Map rendering
                     center = [gdf.geometry.centroid.y.mean(), gdf.geometry.centroid.x.mean()]
-                    m = folium.Map(location=center, zoom_start=14, control_scale=True)
+                    m = folium.Map(location=center, zoom_start=14)
+                    LocateControl(auto_start=False).add_to(m)
                     
-                    # 1. My Location Feature
-                    LocateControl(
-                        auto_start=False,
-                        strings={"title": "موقعي الحالي", "popup": "أنت هنا"},
-                        keepCurrentZoomLevel=True
-                    ).add_to(m)
-                    
-                    # 2. Base Layer (Satellite)
                     folium.TileLayer(
                         tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
                         attr="Google Satellite",
-                        name="الأقمار الصناعية",
+                        name="Satellite",
                         overlay=False,
                         control=True
                     ).add_to(m)
 
-                    # 3. GeoJson shapes
+                    # Mark selected features differently if needed
                     geo_json_layer = folium.GeoJson(
                         gdf,
-                        name="القطع المساحية",
+                        name="Requests",
                         style_function=lambda f: {
-                            'fillColor': f['properties'].get('status_color', '#FFEA00'),
-                            'color': 'white',
-                            'weight': 1,
-                            'fillOpacity': 0.6
+                            'fillColor': f['properties'].get('status_color'),
+                            'color': '#FFFFFF' if f['properties'].get('requestnumber') not in st.session_state.selected_requests else '#00B0FF',
+                            'weight': 1 if f['properties'].get('requestnumber') not in st.session_state.selected_requests else 4,
+                            'fillOpacity': 0.6 if f['properties'].get('requestnumber') not in st.session_state.selected_requests else 0.8
                         },
-                        highlight_function=lambda f: {'weight': 3, 'fillOpacity': 0.9, 'color': '#00E676'},
-                        tooltip=folium.GeoJsonTooltip(
-                            fields=['requestnumber', 'survey_review_status'],
-                            aliases=['رقم الطلب:', 'الحالة:'],
-                            localize=True
-                        )
+                        highlight_function=lambda f: {'weight': 5, 'color': '#00E676', 'fillOpacity': 0.9},
+                        tooltip=folium.GeoJsonTooltip(fields=['requestnumber', 'survey_review_status'], aliases=['رقم الطلب:', 'الحالة:'])
                     ).add_to(m)
 
-                    # --- INTERACTIVITY ---
-                    st.info("💡 اضغط على القطعة في الخريطة لإظهار بياناتها فقط في الجدول بالأسفل.")
+                    st.info("💡 اضغط على الأشكال في الخريطة لتحديدها. الضغط على شكل مختار مسبقاً سيزيله من القائمة.")
                     
-                    map_data = st_folium(
-                        m, 
-                        height=550, 
-                        width='100%', 
-                        key="main_gis_map",
-                        returned_objects=["last_active_drawing", "last_object_clicked"]
-                    )
+                    map_out = st_folium(m, height=550, width='100%', key="multi_select_map")
 
-                    # Selection Logic
-                    # We check last_object_clicked which contains properties
-                    clicked_object = map_data.get("last_object_clicked")
-                    
+                    # UPDATE SELECTION STATE
+                    if map_out.get("last_object_clicked"):
+                        clicked_req = map_out["last_object_clicked"]["properties"]["requestnumber"]
+                        
+                        # Use a small logic to toggle the ID in the session state set
+                        if clicked_req in st.session_state.selected_requests:
+                            st.session_state.selected_requests.remove(clicked_req)
+                        else:
+                            st.session_state.selected_requests.add(clicked_req)
+                        st.rerun()
+
+                    # DISPLAY SELECTED DATA
                     st.divider()
-                    
-                    if clicked_object and 'properties' in clicked_object:
-                        req_num = clicked_object['properties'].get('requestnumber')
-                        display_df = gdf[gdf['requestnumber'] == req_num]
-                        st.success(f"📌 البيانات التفصيلية للطلب: {req_num}")
+                    if st.session_state.selected_requests:
+                        display_df = gdf[gdf['requestnumber'].isin(st.session_state.selected_requests)]
+                        st.success(f"📋 الطلبات المختارة حالياً ({len(display_df)}):")
                     else:
                         display_df = gdf
-                        st.subheader(f"📊 قائمة الطلبات في {sel_sec}")
+                        st.subheader("📋 كافة الطلبات في هذا القسم")
 
                     st.dataframe(
                         display_df.drop(columns=['geometry', 'status_color']),
@@ -198,16 +194,15 @@ def main():
                         hide_index=True
                     )
                 else:
-                    st.warning("⚠️ لا توجد بيانات مسجلة لهذا القسم.")
+                    st.warning("لا توجد بيانات.")
             else:
-                st.info("👈 يرجى تحديد القسم من القائمة الجانبية.")
+                st.info("المرجو اختيار القسم.")
         else:
-            st.info("👈 يرجى اختيار المحافظة للبدء.")
-
+            st.info("المرجو اختيار المحافظة.")
+            
     except Exception as e:
-        st.error("🚨 حدث خطأ فني أثناء معالجة البيانات")
-        with st.expander("تفاصيل الخطأ التقني"):
-            st.code(traceback.format_exc())
+        st.error("خطأ تقني")
+        st.code(traceback.format_exc())
 
 if __name__ == "__main__":
     main()

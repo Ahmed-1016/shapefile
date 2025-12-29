@@ -290,14 +290,18 @@ def main():
                                         # GeoPackage is EPSG:4326 (Lon, Lat) -> (X, Y)
                                         search_x, search_y = in_lon, in_lat
                                         
-                                        # Create BBox for spatial query (buffer 0.0001 deg ~ 10m)
-                                        bbox = (search_x - 0.0001, search_y - 0.0001, search_x + 0.0001, search_y + 0.0001)
+                                        # Create BBox for spatial query (buffer 0.0005 deg ~ 50m to catch nearby)
+                                        # User asked for "approximate" location / close requests
+                                        buffer = 0.0005
+                                        bbox = (search_x - buffer, search_y - buffer, search_x + buffer, search_y + buffer)
                                         
                                         with st.spinner("⏳ جاري الكشف عن موقع الإحداثيات..."):
                                             path = os.path.join(ASSETS_PATH, target_file)
                                             # Read ONLY gov, sec intersecting bbox
                                             matches = gpd.read_file(path, engine='pyogrio', bbox=bbox, columns=['gov', 'sec', 'requestnumber'])
                                             
+                                            st.session_state.custom_marker = [search_y, search_x] # [Lat, Lon] for Marker
+
                                             if not matches.empty:
                                                 match = matches.iloc[0]
                                                 t_gov, t_sec = match['gov'], match['sec']
@@ -408,6 +412,14 @@ def main():
                              st.error(f"خطأ: {e}")
 
                     m = folium.Map(location=center, zoom_start=zoom, tiles=None)
+                    
+                    # Add Custom Marker if exists (Searched Location)
+                    if "custom_marker" in st.session_state and st.session_state.custom_marker:
+                         folium.Marker(
+                            location=st.session_state.custom_marker,
+                            popup="📍 موقع البحث",
+                            icon=folium.Icon(color="red", icon="map-marker", prefix='fa')
+                        ).add_to(m)
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
                     

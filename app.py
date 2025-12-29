@@ -72,6 +72,16 @@ def load_map_data(file_name, base_path, gov, sec):
     if gdf.crs is None: gdf.set_crs(epsg=4326, inplace=True)
     else: gdf = gdf.to_crs(epsg=4326)
     gdf['status_color'] = gdf['survey_review_status'].apply(get_color)
+
+    # --- FIX: JSON Serialization (Date objects crash Folium/JSON) ---
+    for col in gdf.columns:
+        if pd.api.types.is_datetime64_any_dtype(gdf[col]) or gdf[col].dtype == object:
+            # Try to catch date objects specifically if they are in 'object' dtype
+            try:
+                gdf[col] = gdf[col].apply(lambda x: x.isoformat() if hasattr(x, 'isoformat') else x)
+            except:
+                pass
+
     return gdf
 
 # 6. Main App

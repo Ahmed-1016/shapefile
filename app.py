@@ -215,19 +215,15 @@ def main():
                         st.rerun()
 
                     # Table Display
-                    st.divider()
                     if st.session_state.selected_requests:
+                        st.divider()
                         display_df = gdf[gdf['requestnumber'].isin(st.session_state.selected_requests)]
-                        st.success(f"📌 تم تحديد {len(display_df)} طلب. البيانات المعروضة مطابقة للتحديد:")
-                    else:
-                        display_df = gdf
-                        st.subheader(f"📊 القائمة الحالية في {sel_sec}")
-
-                    st.dataframe(
-                        display_df.drop(columns=['geometry', 'status_color']),
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                        st.success(f"📌 البيانات التفصيلية لعدد {len(display_df)} طلب مختار:")
+                        st.dataframe(
+                            display_df.drop(columns=['geometry', 'status_color']),
+                            use_container_width=True,
+                            hide_index=True
+                        )
                 else:
                     st.warning("⚠️ لا توجد بيانات لهذا التقسيم.")
             else:

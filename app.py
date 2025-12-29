@@ -28,7 +28,8 @@ try:
     from folium.plugins import LocateControl, Draw, Fullscreen
     from streamlit_folium import st_folium
     import traceback
-    from shapely.geometry import shape
+    from shapely.geometry import shape, Point
+    from pyproj import Transformer
 except Exception as e:
     st.error(f"❌ خطأ في تحميل المكتبات: {e}")
     st.stop()
@@ -166,6 +167,10 @@ def load_map_data(file_name, base_path, gov, sec):
     path = os.path.join(base_path, file_name)
     where = f"gov = '{gov}' AND sec = '{sec}'"
     gdf = gpd.read_file(path, engine='pyogrio', where=where, use_arrow=True)
+    # Capture Original CRS & Bounds for Validation
+    original_crs = gdf.crs
+    original_bounds = gdf.total_bounds # (minx, miny, maxx, maxy)
+
     if gdf.crs is None: gdf.set_crs(epsg=4326, inplace=True)
     else: gdf = gdf.to_crs(epsg=4326)
     gdf['status_color'] = gdf['survey_review_status'].apply(get_color)
@@ -176,7 +181,8 @@ def load_map_data(file_name, base_path, gov, sec):
             try:
                 gdf[col] = gdf[col].apply(lambda x: x.isoformat() if hasattr(x, 'isoformat') else x)
             except: pass
-    return gdf
+            
+    return gdf, original_crs, original_bounds
 
 # 6. Main App
 def main():
@@ -247,9 +253,46 @@ def main():
             # --- Map Processing ---
             if sel_gov != "عرض الكل" and sel_sec != "عرض الكل":
                 with st.spinner("⏳ جاري تحليل خرائط القسم..."):
-                    gdf_full = load_map_data(target_file, ASSETS_PATH, sel_gov, sel_sec)
+                    gdf_full, org_crs, org_bounds = load_map_data(target_file, ASSETS_PATH, sel_gov, sel_sec)
                 
                 if not gdf_full.empty:
+                    # --- SEARCH SECTION ---
+                    with st.expander("🔍 بحث متقدم (رقم الطلب / إحداثيات)", expanded=False):
+                        search_mode = st.radio("نوع البحث:", ["رقم الطلب", "إحداثيات (X, Y)"], horizontal=True)
+                        
+                        if search_mode == "رقم الطلب":
+                            req_input = st.text_input("أدخل رقم الطلب:")
+                            if st.button("🚀 بحث بالرقم"):
+                                if req_input in gdf_full['requestnumber'].astype(str).values:
+                                    target_geom = gdf_full[gdf_full['requestnumber'].astype(str) == req_input].geometry.iloc[0]
+                                    st.session_state.map_center = [target_geom.centroid.y, target_geom.centroid.x]
+                                    st.session_state.map_zoom = 18
+                                    st.session_state.selected_requests = [req_input]
+                                    st.success("✅ تم العثور على الطلب")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ رقم الطلب غير موجود في هذا القسم")
+                        
+                        else: # Coordinates Search
+                            c1, c2 = st.columns(2)
+                            with c1: x_in = st.number_input("X (Projected):", value=org_bounds[0])
+                            with c2: y_in = st.number_input("Y (Projected):", value=org_bounds[1])
+                            
+                            if st.button("📍 بحث بالإحداثيات"):
+                                # Validation
+                                if (org_bounds[0] <= x_in <= org_bounds[2]) and (org_bounds[1] <= y_in <= org_bounds[3]):
+                                    # Transform to WGS84 for Folium
+                                    transformer = Transformer.from_crs(org_crs, "EPSG:4326", always_xy=True)
+                                    lon, lat = transformer.transform(x_in, y_in)
+                                    
+                                    st.session_state.map_center = [lat, lon]
+                                    st.session_state.map_zoom = 18
+                                    st.success(f"✅ إحداثيات صحيحة! تم التوجيه إلى: {lat:.5f}, {lon:.5f}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"⚠️ الإحداثيات خارج نطاق هذا القسم.")
+                                    st.info(f"النطاق المسموح: X[{org_bounds[0]:.1f} - {org_bounds[2]:.1f}], Y[{org_bounds[1]:.1f} - {org_bounds[3]:.1f}]")
+
                     # 1. Memory Optimization for Folium
                     # We create a lightweight copy ONLY for the map to prevent ArrayMemoryError
                     keep_map_cols = ['requestnumber', 'survey_review_status', 'accepted_date', 'status_color', 'geometry']
@@ -259,7 +302,7 @@ def main():
 
 
                     center = [gdf_map.geometry.centroid.y.mean(), gdf_map.geometry.centroid.x.mean()]
-                    m = folium.Map(location=center, zoom_start=16, tiles=None)
+                    m = folium.Map(location=center, zoom_start=14, tiles=None)
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
                     

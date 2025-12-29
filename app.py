@@ -14,6 +14,9 @@ st.set_page_config(
 # Initialize Session State
 if 'selected_requests' not in st.session_state:
     st.session_state.selected_requests = []
+if 'last_click' not in st.session_state:
+    st.session_state.last_click = None
+
 
 # 2. Lazy Imports
 try:
@@ -188,11 +191,12 @@ def main():
                     # Handle User Interactions
                     updated = False
                     
-                    # A. Click Interaction
-                    if map_out.get("last_object_clicked"):
-                        clicked = map_out["last_object_clicked"]
-                        if "properties" in clicked and "requestnumber" in clicked["properties"]:
-                            req = clicked["properties"]["requestnumber"]
+                    # A. Click Interaction (Toggles Selection)
+                    new_click = map_out.get("last_object_clicked")
+                    if new_click and new_click != st.session_state.last_click:
+                        st.session_state.last_click = new_click
+                        if "properties" in new_click and "requestnumber" in new_click["properties"]:
+                            req = new_click["properties"]["requestnumber"]
                             current_list = list(st.session_state.selected_requests)
                             if req in current_list:
                                 current_list.remove(req)

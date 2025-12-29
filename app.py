@@ -312,6 +312,7 @@ def main():
                                             matches = gpd.read_file(path, engine='pyogrio', bbox=bbox, columns=['gov', 'sec', 'requestnumber'])
                                             
                                             if not matches.empty:
+                                                match = matches.iloc[0]
                                                 t_gov, t_sec = match['gov'], match['sec']
                                                 t_req = match['requestnumber']
                                                 

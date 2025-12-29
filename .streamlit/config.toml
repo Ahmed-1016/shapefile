@@ -5,7 +5,7 @@ headless = true
 gatherUsageStats = false
 
 [client]
-showErrorDetails = false
+showErrorDetails = true
 toolbarMode = "minimal"
 
 [ui]

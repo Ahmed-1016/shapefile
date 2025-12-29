@@ -280,6 +280,9 @@ def main():
                             st.session_state.target_req = search_id 
                             st.success(f"تم العثور عليه في: {target_gov}")
                         
+                        # Trigger Center Reset for Gov Change
+                        if "map_center" in st.session_state: del st.session_state.map_center
+                        
                         # 2. If not ID, try Parsing as Coordinates (Lat, Lon)
                         else:
                             try:
@@ -341,6 +344,18 @@ def main():
                 else:
                     sel_sec = st.selectbox("📍 القسم", ["عرض الكل"], disabled=True)
             
+                # Detect Manual Change (Naive check: if sel_gov/sec differs from last known, reset center?)
+                # Simpler: Just rely on search updates. If user manually changes boxes, the map re-calculates default center 
+                # because we check `if 'map_center' not in st.session_state` in the map block?
+                # No, map block runs AFTER this. We need to clear map_center if user changes dropdown manually.
+                
+                # Check for Gov/Sec Change to Reset View
+                current_selection = f"{sel_gov}_{sel_sec}"
+                if 'last_selection' not in st.session_state: st.session_state.last_selection = current_selection
+                if st.session_state.last_selection != current_selection:
+                    if 'map_center' in st.session_state: del st.session_state.map_center
+                    st.session_state.last_selection = current_selection
+            
                 
                 
 
@@ -386,25 +401,36 @@ def main():
                     gdf_map['geometry'] = gdf_map['geometry'].simplify(0.00001, preserve_topology=True)
 
 
-                    center = [gdf_map.geometry.centroid.y.mean(), gdf_map.geometry.centroid.x.mean()]
-                    zoom = 16
                     
-                    # Handle Global Search Zoom
+                    # Default Center (Mean of Data)
+                    default_center = [gdf_map.geometry.centroid.y.mean(), gdf_map.geometry.centroid.x.mean()]
+                    
+                    # Initialize View State if not present or if Gov/Sec changed
+                    if 'map_center' not in st.session_state:
+                        st.session_state.map_center = default_center
+                    
+                    # If user just searched, update persistent center
+                    if "custom_center" in st.session_state:
+                        try:
+                            cx, cy = st.session_state.custom_center
+                            st.session_state.map_center = [cy, cx]
+                        except: pass
+                    
+                    # Use Persistent Center
+                    center = st.session_state.map_center
+                    zoom = 16
+
+                    # Handle Global Search Zoom (Request ID)
                     if "target_req" in st.session_state and st.session_state.target_req:
                         target = st.session_state.target_req
                         found = gdf_full[gdf_full['requestnumber'].astype(str) == str(target)]
                         if not found.empty:
                             geom = found.geometry.iloc[0]
-                            center = [geom.centroid.y, geom.centroid.x]
+                            # Update Persistent Center
+                            st.session_state.map_center = [geom.centroid.y, geom.centroid.x]
+                            center = st.session_state.map_center
                             zoom = 19
                         st.session_state.target_req = None
-
-                    # Handle Custom Coordinate Zoom (Center Calculation)
-                    if "custom_center" in st.session_state:
-                         try:
-                             cx, cy = st.session_state.custom_center
-                             center = [cy, cx]
-                         except: pass
 
                     m = folium.Map(location=center, zoom_start=zoom, tiles=None)
 

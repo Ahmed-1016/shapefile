@@ -414,7 +414,10 @@ def main():
                     if "custom_center" in st.session_state:
                          try:
                              cx, cy = st.session_state.custom_center
-                             m.fit_bounds([[cy, cx], [cy, cx]], max_zoom=19)
+                             # Force viewport around pin
+                             # Add a small buffer to create a valid bbox (approx 50m) to ensure Leaflet zooms
+                             delta = 0.0005 
+                             m.fit_bounds([[cy - delta, cx - delta], [cy + delta, cx + delta]], max_zoom=19)
                              st.success(f"📍 تم التوجيه للإحداثيات: {cy}, {cx}")
                              del st.session_state.custom_center
                          except Exception as e:

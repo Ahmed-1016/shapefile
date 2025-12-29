@@ -1,45 +1,27 @@
 import streamlit as st
 import os
+import sys
 
-st.set_page_config(page_title="GIS Safe Boot")
+st.set_page_config(page_title="GIS Skeleton Mode")
 
-st.title("🛡️ GIS Service - Safe Boot")
+st.title("🦴 GIS Service: Skeleton Diagnostic Mode")
 
-st.write("This application is currently in **Safe Boot Mode** to diagnose deployment issues.")
+st.markdown("""
+### ⚠️ تم تفعيل نمط الهيكل العظمي (Skeleton Mode)
+لقد قمت بإزالة الملفات الكبيرة والمكتبات الثقيلة مؤقتاً لحل مشكلة فشل التحميل (Clone Failed) من GitHub.
 
-st.info("If you see this message, the basic Streamlit server is running correctly.")
+**لماذا ترى هذه الصفحة؟**
+سيرفر Streamlit واجه مشكلة في تحميل ملف البيانات (141MB)، مما تسبب في توقف الخدمة بالكامل. هذا النمط هو "اختبار حياة" للسيرفر.
 
-st.sidebar.markdown("### 🔍 Diagnostics")
+**الآن، إذا كنت ترى هذه الصفحة بوضوح:**
+1. فهذا يعني أن السيرفر يعمل بشكل ممتاز ✅.
+2. المشكلة السابقة كانت بسبب **حجم ملف الخريطة** أثناء الرفع.
+
+**الخطوات القادمة:**
+- سأقوم الآن بإعادة إضافة المكتبات (GeoPandas) تدريجياً.
+- سنحتاج لرفع ملف الخريطة بطريقة مختلفة أو التأكد من إعداد LFS بشكل صحيح.
+""")
+
+st.sidebar.markdown("### 🔍 System Info")
 st.sidebar.write(f"CWD: {os.getcwd()}")
-
-# Check for data files
-st.write("### 📂 Data Check")
-found_gpkg = False
-for root, dirs, files in os.walk("."):
-    for file in files:
-        if file.endswith(".gpkg"):
-            size = os.path.getsize(os.path.join(root, file)) / (1024 * 1024)
-            st.write(f"✅ Found: `{os.path.join(root, file)}` ({size:.2f} MB)")
-            found_gpkg = True
-
-if not found_gpkg:
-    st.error("❌ No .gpkg files found in the repository.")
-
-# Delayed Import Test
-if st.button("🧪 Test GIS Libraries"):
-    with st.spinner("Importing GeoPandas..."):
-        try:
-            import geopandas as gpd
-            st.success(f"✅ GeoPandas {gpd.__version__} loaded successfully!")
-        except Exception as e:
-            st.error(f"❌ GeoPandas failed: {e}")
-            
-    with st.spinner("Importing Folium..."):
-        try:
-            import folium
-            st.success("✅ Folium loaded successfully!")
-        except Exception as e:
-            st.error(f"❌ Folium failed: {e}")
-
-st.write("---")
-st.warning("If the app crashes AFTER clicking the test button, the issue is a library conflict or RAM limit.")
+st.sidebar.write(f"Files in root: {os.listdir('.')}")

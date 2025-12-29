@@ -262,54 +262,72 @@ def main():
                     sel_sec = st.selectbox("📍 القسم", ["عرض الكل"], disabled=True)
             
             with col3:
-                # GLOBAL SEARCH (ID or Coords)
-                search_mode = st.radio("نوع البحث", ["رقم الطلب", "إحداثيات (X,Y)"], horizontal=True, label_visibility="collapsed")
+                # GLOBAL SEARCH (Smart: ID OR Coords)
+                # User requested single search box handling both
+                c_search, c_btn = st.columns([3, 1])
+                with c_search:
+                    search_id = st.text_input("بحث (رقم طلب / إحداثيات)", placeholder="رقم أو Lat,Lon...", label_visibility="collapsed", key="global_smart_search")
+                with c_btn:
+                    if st.button("بحث", key="btn_smart_search"):
+                        if search_id:
+                            # Search in META data globally
+                            # 1. Try by Request Number
+                            found = meta_df[meta_df['requestnumber'] == search_id]
+                            
+                            if not found.empty:
+                                target_gov = found.iloc[0]['gov']
+                                target_sec = found.iloc[0]['sec']
+                                st.session_state.search_gov = target_gov
+                                st.session_state.search_sec = target_sec
+                                st.session_state.selected_requests = [search_id]
+                                st.session_state.target_req = search_id 
+                                st.success(f"تم العثور عليه في: {target_gov}")
+                                st.rerun()
+                            
+                            # 2. If not ID, try Parsing as Coordinates (Lat, Lon)
+                            else:
+                                try:
+                                    # Clean input
+                                    clean_id = search_id.replace(',', ' ').strip()
+                                    parts = clean_id.split()
+                                    if len(parts) >= 2:
+                                        # Assume Lat, Lon as per user example (31.208638, 30.059425) -> Y, X
+                                        in_lat, in_lon = float(parts[0]), float(parts[1])
+                                        
+                                        # GeoPackage is EPSG:4326 (Lon, Lat) -> (X, Y)
+                                        search_x, search_y = in_lon, in_lat
+                                        
+                                        # Create BBox for spatial query (buffer 0.0001 deg ~ 10m)
+                                        bbox = (search_x - 0.0001, search_y - 0.0001, search_x + 0.0001, search_y + 0.0001)
+                                        
+                                        with st.spinner("⏳ جاري الكشف عن موقع الإحداثيات..."):
+                                            path = os.path.join(ASSETS_PATH, target_file)
+                                            # Read ONLY gov, sec intersecting bbox
+                                            matches = gpd.read_file(path, engine='pyogrio', bbox=bbox, columns=['gov', 'sec', 'requestnumber'])
+                                            
+                                            if not matches.empty:
+                                                match = matches.iloc[0]
+                                                t_gov, t_sec = match['gov'], match['sec']
+                                                t_req = match['requestnumber']
+                                                
+                                                st.session_state.search_gov = t_gov
+                                                st.session_state.search_sec = t_sec
+                                                st.session_state.selected_requests = [str(t_req)]
+                                                st.session_state.target_req = str(t_req)
+                                                st.success(f"📍 إحداثيات صحيحة! موجود في: {t_gov} - {t_sec}")
+                                                st.rerun()
+                                            else:
+                                                 st.warning("⚠️ الموقع لا يحتوي على طلبات مسجلة (سيتم التوجيه فقط)")
+                                                 st.session_state.custom_center = (search_x, search_y)
+                                                 st.rerun()
+                                    else:
+                                        st.error("❌ رقم الطلب غير موجود")
+                                except ValueError:
+                                    st.error("❌ صيغة غير صحيحة")
                 
-                if search_mode == "رقم الطلب":
-                    c_search, c_btn = st.columns([3, 1])
-                    with c_search:
-                        search_id = st.text_input("بحث برقم الطلب", placeholder="أدخل الرقم...", label_visibility="collapsed", key="global_req_search")
-                    with c_btn:
-                        if st.button("بحث", key="btn_req_search"):
-                            if search_id:
-                                # Search in META data globally
-                                found = meta_df[meta_df['requestnumber'] == search_id]
-                                if not found.empty:
-                                    target_gov = found.iloc[0]['gov']
-                                    target_sec = found.iloc[0]['sec']
-                                    st.session_state.search_gov = target_gov
-                                    st.session_state.search_sec = target_sec
-                                    st.session_state.selected_requests = [search_id]
-                                    st.session_state.target_req = search_id 
-                                    st.success(f"تم العثور عليه في: {target_gov}")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ غير موجود")
                 
-                else: # Coordinates Search
-                    c_x, c_y, c_go = st.columns([1, 1, 0.7])
-                    with c_x: x_in = st.number_input("X", value=0.0, label_visibility="collapsed", placeholder="X")
-                    with c_y: y_in = st.number_input("Y", value=0.0, label_visibility="collapsed", placeholder="Y")
-                    with c_go:
-                        if st.button("ذهاب", key="btn_coord_search"):
-                            # Logic: We need to know which section this point falls into.
-                            # For simplicity/speed in global mode without loading all geometries, 
-                            # we can just ZOOM to the location on the currently loaded map (if any) OR generic map.
-                            # But user likely wants to see the data. 
-                            # If we don't know the exact section, we can just center the map there.
-                            
-                            # Assuming standard CRS transformation (Egypt uses specific ones usually, but here we likely rely on what load_map_data used)
-                            # To be safe globally, we need a way to transform without loading a specific file's CRS if possible, 
-                            # OR we just use the last known CRS from cache if available, or default to a standard one.
-                            
-                            # BETTER APPROACH for "Global": Just update map center. 
-                            # Since we don't know the section, we can't load data.
-                            # BUT we can try to find valid range if we had bounds in meta (we don't).
-                            
-                            # Let's assume standard transformation from project CRS to WGS84.
-                            # We'll use a session state flag to trigger "Custom Center" view.
-                            st.session_state.custom_center = (x_in, y_in)
-                            st.rerun()
+                else: # Coordinates Search (Removed - Merged into smart search)
+                    pass 
 
             # Selection Info & Clear (Hidden logic, UI via Map Button)
             if st.session_state.selected_requests:
@@ -356,7 +374,7 @@ def main():
                     center = [gdf_map.geometry.centroid.y.mean(), gdf_map.geometry.centroid.x.mean()]
                     zoom = 16
                     
-                    # Handle Global Search Zoom (Request ID)
+                    # Handle Global Search Zoom
                     if "target_req" in st.session_state and st.session_state.target_req:
                         target = st.session_state.target_req
                         found = gdf_full[gdf_full['requestnumber'].astype(str) == str(target)]
@@ -365,21 +383,19 @@ def main():
                             center = [geom.centroid.y, geom.centroid.x]
                             zoom = 19
                         st.session_state.target_req = None
-                        
+
                     # Handle Custom Coordinate Zoom
                     if "custom_center" in st.session_state:
-                         # We need to transform X,Y (Projected) -> Lat,Lon (WGS84)
-                         # We use the org_crs from the currently loaded data as a best guess for the system
                          try:
                              cx, cy = st.session_state.custom_center
-                             transformer = Transformer.from_crs(org_crs, "EPSG:4326", always_xy=True)
-                             lon, lat = transformer.transform(cx, cy)
-                             center = [lat, lon]
-                             zoom = 18
-                             st.success(f"📍 تم التوجيه للإحداثيات: {cx}, {cy}")
-                             del st.session_state.custom_center # Clear after use
+                             # GeoPackage is 4326, so (cx, cy) are (Lon, Lat)
+                             # Folium takes (Lat, Lon)
+                             center = [cy, cx]
+                             zoom = 19
+                             st.success(f"📍 تم التوجيه للإحداثيات: {cy}, {cx}")
+                             del st.session_state.custom_center
                          except Exception as e:
-                             st.error(f"خطأ في التحويل: {e}")
+                             st.error(f"خطأ: {e}")
 
                     m = folium.Map(location=center, zoom_start=zoom, tiles=None)
                     LocateControl(auto_start=False).add_to(m)

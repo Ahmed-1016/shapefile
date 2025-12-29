@@ -1,53 +1,36 @@
 import streamlit as st
-import geopandas as gpd
-import leafmap.foliumap as leafmap
 import os
-import json
-import pandas as pd
-import folium
-from folium.plugins import LocateControl, Draw
-from streamlit_folium import st_folium
-import shapely.geometry as sg
-import traceback
 
 # 1. Page Config (Must be first)
 st.set_page_config(
     page_title="El Massa Consult - GIS Premium",
     page_icon="🌍",
-    layout="wide",
-    initial_sidebar_state="auto"
+    layout="wide"
 )
 
-# 2. Custom CSS
+# 2. Lazy Imports to catch errors
+try:
+    import geopandas as gpd
+    import pandas as pd
+    import folium
+    from streamlit_folium import st_folium
+    import traceback
+except Exception as e:
+    st.error(f"❌ Error during library import: {e}")
+    st.stop()
+
+# 3. Custom CSS
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-    html, body, [class*="css"] {
-        font-family: 'Cairo', sans-serif;
-        direction: rtl;
-        text-align: right;
-    }
-    .main-title {
-        background: linear-gradient(90deg, #00C853, #00B0FF);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-size: 2.5rem;
-        font-weight: 700;
-        text-align: center;
-        margin-bottom: 20px;
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }
+    .stApp { background-color: #0A0E27; color: white; }
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Path Detection
+# 4. Path Detection
 def get_assets_path():
-    possible = [
-        os.path.join(".", "assets", "gis"),
-        os.path.join("..", "assets", "gis"),
-        os.path.join(".", "gis_assets"),
-        "assets/gis",
-        "gis_service/assets/gis"
-    ]
+    possible = ["assets/gis", "gis_assets", "."]
     for p in possible:
         if os.path.exists(p) and any(f.endswith('.gpkg') for f in os.listdir(p)):
             return p
@@ -55,75 +38,81 @@ def get_assets_path():
 
 ASSETS_PATH = get_assets_path()
 
-# 4. Data Loading Logic
+# 5. Optimized Data Loading
 @st.cache_data
-def load_data(file_name, base_path):
+def load_data_safe(file_name, base_path):
     path = os.path.join(base_path, file_name)
     if not os.path.exists(path):
-        return None, f"❌ الملف غير موجود: {path}"
+        return None, f"❌ File not found: {path}"
     
     try:
-        # Load only essential columns
+        # Load only essential columns + Row limit as a safety valve
         essential = ['geometry', 'requestnumber', 'gov', 'sec', 'survey_review_status']
+        
+        # We use pyogrio with arrow for maximum memory efficiency
         try:
-            gdf = gpd.read_file(path, engine='pyogrio', columns=essential)
+            gdf = gpd.read_file(path, engine='pyogrio', columns=essential, use_arrow=True)
         except:
             gdf = gpd.read_file(path)
             gdf = gdf[[c for c in essential if c in gdf.columns]]
+
+        # IF the file is still too big, we sample it to prevent OOM
+        if len(gdf) > 20000:
+            st.sidebar.warning(f"⚠️ Large dataset ({len(gdf)} rows). Loading top 20,000 for stability.")
+            gdf = gdf.head(20000)
+            
+        # Simplify geometry aggressively (0.0001 is ~10m accuracy)
+        gdf['geometry'] = gdf['geometry'].simplify(0.0001, preserve_topology=True)
         
-        # Simplify geometry for performance
-        gdf['geometry'] = gdf['geometry'].simplify(0.0001)
-        
-        # Cleanup types for JS serialization
+        # Cleanup
         for col in gdf.columns:
             if col != 'geometry':
-                if pd.api.types.is_datetime64_any_dtype(gdf[col]):
-                    gdf[col] = gdf[col].dt.strftime('%Y-%m-%d')
-                else:
-                    gdf[col] = gdf[col].astype(str).replace('nan', '')
+                gdf[col] = gdf[col].astype(str).replace('nan', '')
         
         if gdf.crs is None: gdf.set_crs(epsg=4326, inplace=True)
         else: gdf = gdf.to_crs(epsg=4326)
         
         return gdf, None
     except Exception as e:
-        return None, f"Error: {str(e)}"
+        return None, f"❌ Data Error: {str(e)}"
 
-# 5. Main App
+# 6. Main App
 def main():
     try:
-        st.markdown('<h1 class="main-title">🌍 El Massa Consult - GIS View</h1>', unsafe_allow_html=True)
+        st.title("🌍 El Massa Consult - GIS View")
         
-        # Debug info in sidebar
-        st.sidebar.markdown("### 🛠️ DEBUG INFO")
+        # Sidebar info
+        st.sidebar.markdown("### 🛠️ System Status")
         st.sidebar.text(f"Path: {ASSETS_PATH}")
-        if st.sidebar.button("🧹 Clear Cache"):
+        if st.sidebar.button("🧹 Clear Cache & Reload"):
             st.cache_data.clear()
             st.rerun()
 
         files = [f for f in os.listdir(ASSETS_PATH) if f.endswith('.gpkg')] if os.path.exists(ASSETS_PATH) else []
         
         if not files:
+            st.info("Please upload a file or ensure assets/gis exists.")
             uploaded = st.file_uploader("Upload GPKG", type=['gpkg'])
             if uploaded:
                 if not os.path.exists("temp"): os.makedirs("temp")
-                with open(f"temp/{uploaded.name}", "wb") as f: f.write(uploaded.getbuffer())
+                save_path = f"temp/{uploaded.name}"
+                with open(save_path, "wb") as f: f.write(uploaded.getbuffer())
                 target_file, target_path = uploaded.name, "temp"
-            else:
-                st.info("Please upload a file or add to assets/gis")
-                return
+            else: return
         else:
             target_file, target_path = files[0], ASSETS_PATH
 
-        with st.spinner("Loading..."):
-            gdf, err = load_data(target_file, target_path)
+        with st.spinner("⏳ Processing GIS Data..."):
+            gdf, err = load_data_safe(target_file, target_path)
         
         if err:
             st.error(err)
             return
 
-        # Filters
-        col1, col2, col3 = st.columns(3)
+        st.sidebar.success(f"✅ Loaded {len(gdf)} records")
+
+        # Layout
+        col1, col2 = st.columns(2)
         with col1:
             govs = sorted(gdf['gov'].unique()) if 'gov' in gdf.columns else []
             sel_gov = st.selectbox("المحافظة", ["الكل"] + govs)
@@ -136,42 +125,33 @@ def main():
             sel_sec = st.selectbox("القسم", ["الكل"] + secs)
         
         if sel_sec != "الكل": filtered = filtered[filtered['sec'] == sel_sec]
-        
-        with col3:
-            search = st.text_input("بحث برقم الطلب")
-            if search: filtered = filtered[filtered['requestnumber'].str.contains(search, na=False)]
 
         st.divider()
 
         if sel_sec == "الكل":
-            st.warning("⚠️ اختر قسماً محدداً لعرض الخريطة")
-        elif filtered.empty:
-            st.error("❌ لا توجد بيانات")
+            st.info("💡 اختر قسماً محدداً لعرض الخريطة التفاعلية")
+        elif not filtered.empty:
+            # Simple Folium Map
+            center = [filtered.geometry.centroid.y.mean(), filtered.geometry.centroid.x.mean()]
+            m = folium.Map(location=center, zoom_start=13, tiles="CartoDB dark_matter")
+            
+            # Add GeoJson
+            folium.GeoJson(
+                filtered,
+                style_function=lambda f: {
+                    'fillColor': '#4CAF50' if f['properties'].get('survey_review_status') == 'مقبول' else '#F44336',
+                    'color': 'white', 'weight': 1, 'fillOpacity': 0.6
+                },
+                tooltip=folium.GeoJsonTooltip(fields=['requestnumber', 'survey_review_status'])
+            ).add_to(m)
+            
+            st_folium(m, height=550, width='100%')
+            st.dataframe(filtered.drop(columns='geometry'), use_container_width=True, hide_index=True)
         else:
-            # Map Fragment
-            @st.fragment
-            def show_map(df):
-                m = leafmap.Map(center=[df.geometry.centroid.y.mean(), df.geometry.centroid.x.mean()], zoom=13)
-                m.add_basemap("HYBRID")
-                
-                folium.GeoJson(
-                    df,
-                    style_function=lambda f: {
-                        'fillColor': '#4CAF50' if f['properties'].get('survey_review_status') == 'مقبول' else '#F44336',
-                        'color': 'white', 'weight': 1, 'fillOpacity': 0.6
-                    },
-                    tooltip=folium.GeoJsonTooltip(fields=['requestnumber', 'survey_review_status'])
-                ).add_to(m)
-                
-                st_folium(m, height=600, width='stretch')
-                
-                st.subheader("📊 البيانات المحددة")
-                st.dataframe(df.drop(columns='geometry'), hide_index=True)
-
-            show_map(filtered)
+            st.warning("⚠️ لا توجد بيانات للمعيار المختار")
 
     except Exception as e:
-        st.error("🚨 Critical Error")
+        st.error("🚨 Critical System Failure")
         st.code(traceback.format_exc())
 
 if __name__ == "__main__":

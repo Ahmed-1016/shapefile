@@ -248,19 +248,6 @@ def main():
             
             govs = sorted(meta_df['gov'].unique())
             
-            with col1:
-                sel_gov = st.selectbox("🏛️ المحافظة", ["عرض الكل"] + govs, index=0 if "search_gov" not in st.session_state else (govs.index(st.session_state.search_gov) + 1 if st.session_state.search_gov in govs else 0), key="gov_select")
-            
-            with col2:
-                if sel_gov != "عرض الكل":
-                    secs = sorted(meta_df[meta_df['gov'] == sel_gov]['sec'].unique())
-                    current_idx = 0
-                    if "search_sec" in st.session_state and st.session_state.search_sec in secs:
-                        current_idx = secs.index(st.session_state.search_sec) + 1
-                    sel_sec = st.selectbox("📍 القسم", ["عرض الكل"] + secs, index=current_idx, key="sec_select")
-                else:
-                    sel_sec = st.selectbox("📍 القسم", ["عرض الكل"], disabled=True)
-            
             with col3:
                 # GLOBAL SEARCH (Smart: ID OR Coords)
                 # User requested single search box handling both
@@ -335,6 +322,20 @@ def main():
                                         st.error("❌ رقم الطلب غير موجود")
                                 except ValueError:
                                     st.error("❌ صيغة غير صحيحة")
+
+            with col1:
+                sel_gov = st.selectbox("🏛️ المحافظة", ["عرض الكل"] + govs, index=0 if "search_gov" not in st.session_state else (govs.index(st.session_state.search_gov) + 1 if st.session_state.search_gov in govs else 0), key="gov_select")
+            
+            with col2:
+                if sel_gov != "عرض الكل":
+                    secs = sorted(meta_df[meta_df['gov'] == sel_gov]['sec'].unique())
+                    current_idx = 0
+                    if "search_sec" in st.session_state and st.session_state.search_sec in secs:
+                        current_idx = secs.index(st.session_state.search_sec) + 1
+                    sel_sec = st.selectbox("📍 القسم", ["عرض الكل"] + secs, index=current_idx, key="sec_select")
+                else:
+                    sel_sec = st.selectbox("📍 القسم", ["عرض الكل"], disabled=True)
+            
                 
                 
 

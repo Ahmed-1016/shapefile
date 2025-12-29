@@ -170,10 +170,6 @@ def load_map_data(file_name, base_path, gov, sec):
     else: gdf = gdf.to_crs(epsg=4326)
     gdf['status_color'] = gdf['survey_review_status'].apply(get_color)
 
-    # Force IDs to string for reliable selection logic
-    if 'requestnumber' in gdf.columns:
-        gdf['requestnumber'] = gdf['requestnumber'].astype(str)
-
     # JSON Cleanup for Dates
     for col in gdf.columns:
         if pd.api.types.is_datetime64_any_dtype(gdf[col]) or gdf[col].dtype == object:
@@ -220,14 +216,21 @@ def main():
                     sel_sec = st.selectbox("📍 القسم", ["عرض الكل"], disabled=True)
             
             with col3:
-                # Search box moved to Map context for better sync
-                pass
+                # Display current selection count (read-only)
+                if st.session_state.selected_requests:
+                    st.info(f"📌 محدد حالياً: {len(st.session_state.selected_requests)} طلب")
+                else:
+                    st.info("💡 اضغط على الخريطة للتحديد")
 
-            # CSV Export Button
-            st.markdown('<div style="text-align: left;">', unsafe_allow_html=True)
-            if st.button("📥 تصدير CSV"):
-                st.toast("جاري تحضير ملف البيانات...")
-            st.markdown('</div>', unsafe_allow_html=True)
+            # Action Buttons
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("🗑️ مسح التحديد", disabled=not st.session_state.selected_requests):
+                    st.session_state.selected_requests = []
+                    st.rerun()
+            with col_btn2:
+                if st.button("📥 تصدير CSV"):
+                    st.toast("جاري تحضير ملف البيانات...")
             
             st.markdown('</div>', unsafe_allow_html=True) # End controls-body
 
@@ -297,23 +300,9 @@ def main():
                         )
                     ).add_to(m)
 
-                    # Preserve zoom and center if available from previous state
-                    if 'map_center' in st.session_state and 'map_zoom' in st.session_state:
-                        m.location = st.session_state.map_center
-                        m.zoom_start = st.session_state.map_zoom
-                    
-                    map_out = st_folium(m, height=520, width='100%', key="main_map", returned_objects=["last_object_clicked", "all_drawings", "center", "zoom"])
-                    
-                    # Save current map state
-                    if map_out and map_out.get('center'):
-                        st.session_state.map_center = [map_out['center']['lat'], map_out['center']['lng']]
-                    if map_out and map_out.get('zoom'):
-                        st.session_state.map_zoom = map_out['zoom']
+                    map_out = st_folium(m, height=520, width='100%', key="main_map")
 
-                    # 3. Handle Map Interaction (WITHOUT RERUN)
-                    
-                    # Determine current selection based on map interactions
-                    current_selection = []
+                    # 3. Handle Map Interaction
                     
                     # A. Spatial Selection (Drawing) - Every new drawing REPLACES the current selection
                     new_drawings = map_out.get("all_drawings")
@@ -324,28 +313,27 @@ def main():
                         if "geometry" in last_draw:
                             draw_geom = shape(last_draw["geometry"])
                             # Find all request numbers within the drawing
+                            # Intersection check
                             mask = gdf_full.geometry.apply(lambda x: draw_geom.contains(x) or x.intersects(draw_geom))
                             found_ids = gdf_full[mask]['requestnumber'].tolist()
                             if found_ids:
-                                current_selection = found_ids
                                 st.session_state.selected_requests = found_ids
+                                st.rerun()
 
                     # B. Click Selection - Every new click REPLACES the current selection
                     new_click = map_out.get("last_object_clicked")
                     if new_click and new_click != st.session_state.last_click:
                         st.session_state.last_click = new_click
                         if "properties" in new_click and "requestnumber" in new_click["properties"]:
-                            req = str(new_click["properties"]["requestnumber"])
-                            current_selection = [req]
+                            req = new_click["properties"]["requestnumber"]
+                            # REPLACEMENT logic: Selection becomes only this request
                             st.session_state.selected_requests = [req]
-                    
-                    # Use current selection if available, otherwise use session state
-                    display_selection = current_selection if current_selection else st.session_state.selected_requests
+                            st.rerun()
 
-                    # Table - Display immediately based on current interaction
-                    if display_selection:
+                    # Table
+                    if st.session_state.selected_requests:
                         st.subheader("📋 بيانات الطلبات المختارة")
-                        display_df = gdf_full[gdf_full['requestnumber'].isin(display_selection)]
+                        display_df = gdf_full[gdf_full['requestnumber'].isin(st.session_state.selected_requests)]
                         
                         # Apply Arabic Names Mapping
                         field_names = {

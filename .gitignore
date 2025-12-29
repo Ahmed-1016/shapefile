@@ -13,11 +13,12 @@ ENV/
 .streamlit/secrets.toml
 
 # Data files
-*.gpkg
-*.geojson
-assets/gis/*.gpkg
-gis_assets/*.gpkg
-gis_assets/*.geojson
+# We track these via Git LFS normally, so we don't ignore them here
+# *.gpkg
+# *.geojson
+# assets/gis/*.gpkg
+# gis_assets/*.gpkg
+# gis_assets/*.geojson
 
 # Generated Maps
 *.html

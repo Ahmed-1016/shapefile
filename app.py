@@ -276,7 +276,6 @@ def main():
                                 
                                 # No selection as per request
                                 st.session_state.target_req = search_id 
-                                st.session_state.map_id += 1
                                 st.success(f"تم العثور عليه في: {target_gov}")
                             
                             # 2. If not ID, try Parsing as Coordinates (Lat, Lon)
@@ -318,12 +317,10 @@ def main():
                                                 
                                                 # Coordinate Search: Do NOT select request
                                                 st.session_state.custom_center = (search_x, search_y)
-                                                st.session_state.map_id += 1 # Force Map Reset
                                                 st.success(f"📍 إحداثيات صحيحة! موجود في: {t_gov} - {t_sec}")
                                             else:
                                                  st.warning("⚠️ الموقع لا يحتوي على طلبات مسجلة (سيتم التوجيه فقط)")
                                                  st.session_state.custom_center = (search_x, search_y)
-                                                 st.session_state.map_id += 1
                                     else:
                                         st.error("❌ رقم الطلب غير موجود")
                                 except ValueError:
@@ -462,7 +459,7 @@ def main():
                         )
                     ).add_to(m)
 
-                    map_out = st_folium(m, height=520, width='100%', key=f"main_map_{st.session_state.map_id}")
+                    map_out = st_folium(m, height=520, width='100%', key="main_map")
 
                     # 3. Handle Map Interaction
                     

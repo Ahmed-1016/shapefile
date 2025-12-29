@@ -32,6 +32,30 @@ try:
     import traceback
     from shapely.geometry import shape, Point
     from pyproj import Transformer
+    from branca.element import MacroElement
+    from jinja2 import Template
+
+# --- Map Control Class ---
+    class ClearButton(MacroElement):
+        _template = Template("""
+            {% macro script(this, kwargs) %}
+                var clearBtn = L.Control.extend({
+                    options: { position: 'topright' },
+                    onAdd: function (map) {
+                        var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+                        container.style.backgroundColor = 'white'; 
+                        container.style.width = '30px'; 
+                        container.style.height = '30px';
+                        container.style.cursor = 'pointer';
+                        container.innerHTML = '<a href="?clear_selection=true" title="محو التحديد" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; text-decoration:none; color:black; font-weight:bold; font-size:18px;">❌</a>';
+                        return container;
+                    }
+                });
+                map.addControl(new clearBtn());
+            {% endmacro %}
+        """)
+
+# --- Config & Setup ---
 except Exception as e:
     st.error(f"❌ خطأ في تحميل المكتبات: {e}")
     st.stop()
@@ -251,67 +275,69 @@ def main():
             govs = sorted(meta_df['gov'].unique())
             
             with col3:
-                # GLOBAL SEARCH (Smart: ID OR Coords)
-                # User requested single search box handling both
+                # Mode Selection
+                search_mode = st.radio("نشاط البحث", ["رقم الطلب", "إحداثيات"], horizontal=True, label_visibility="collapsed")
+                
                 with st.form("global_search_form"):
                     c_search, c_btn = st.columns([3, 1])
+                    
                     with c_search:
-                        search_id = st.text_input("بحث (رقم طلب / إحداثيات)", placeholder="رقم أو Lat,Lon...", label_visibility="collapsed", key="global_smart_search")
+                        if search_mode == "رقم الطلب":
+                            search_input = st.text_input("رقم الطلب", placeholder="أدخل رقم الملف...", label_visibility="collapsed")
+                        else:
+                            search_input = st.text_input("إحداثيات", placeholder="Lat, Lon (30.12, 31.45)", label_visibility="collapsed")
+                            
                     with c_btn:
                         submitted = st.form_submit_button("بحث")
-                    
-                    if submitted and search_id:
-                        # Search in META data globally
-                        # 1. Try by Request Number
-                        found = meta_df[meta_df['requestnumber'] == search_id]
-                        
-                        if not found.empty:
-                            target_gov = found.iloc[0]['gov']
-                            target_sec = found.iloc[0]['sec']
+
+                    if submitted and search_input:
+                        # 1. Search by Request Number
+                        if search_mode == "رقم الطلب":
+                            found = meta_df[meta_df['requestnumber'] == search_input]
                             
-                            st.session_state.search_gov = target_gov
-                            st.session_state.search_sec = target_sec
-                            
-                            # Force Widget Update
-                            st.session_state['gov_select'] = target_gov
-                            st.session_state['sec_select'] = target_sec
-                            
-                            # No selection as per request
-                            st.session_state.target_req = search_id 
-                            st.success(f"تم العثور عليه في: {target_gov}")
-                        
-                        # Trigger Center Reset for Gov Change
-                        if "map_center" in st.session_state: del st.session_state.map_center
-                        
-                        # 2. If not ID, try Parsing as Coordinates (Lat, Lon)
+                            if not found.empty:
+                                target_gov = found.iloc[0]['gov']
+                                target_sec = found.iloc[0]['sec']
+                                
+                                st.session_state.search_gov = target_gov
+                                st.session_state.search_sec = target_sec
+                                
+                                # Force Widget Update
+                                st.session_state['gov_select'] = target_gov
+                                st.session_state['sec_select'] = target_sec
+                                
+                                # No selection as per request
+                                st.session_state.target_req = search_input
+                                st.success(f"تم العثور عليه في: {target_gov}")
+                                
+                                if "map_center" in st.session_state: del st.session_state.map_center
+                            else:
+                                st.error("❌ رقم الطلب غير موجود")
+
+                        # 2. Search by Coordinates (Lat, Lon)
                         else:
                             try:
-                                # Clean input
-                                clean_id = search_id.replace(',', ' ').strip()
+                                clean_id = search_input.replace(',', ' ').strip()
                                 parts = clean_id.split()
                                 if len(parts) >= 2:
-                                    # Assume Lat, Lon as per user example (31.208638, 30.059425) -> Y, X
+                                    # Assume Lat, Lon as per user input -> Y, X
                                     in_lat, in_lon = float(parts[0]), float(parts[1])
-                                    
-                                    # GeoPackage is EPSG:4326 (Lon, Lat) -> (X, Y)
                                     search_x, search_y = in_lon, in_lat
                                     
-                                    # Create BBox for spatial query (buffer 0.0005 deg ~ 50m to catch nearby)
-                                    # User asked for "approximate" location / close requests
+                                    # Create BBox for spatial query (buffer 0.0005 deg ~ 50m)
                                     buffer = 0.0005
                                     bbox = (search_x - buffer, search_y - buffer, search_x + buffer, search_y + buffer)
                                     
-                                    with st.spinner("⏳ جاري الكشف عن موقع الإحداثيات..."):
+                                    with st.spinner("⏳ جاري الكشف عن الموقع..."):
                                         path = os.path.join(ASSETS_PATH, target_file)
                                         # Read ONLY gov, sec intersecting bbox
                                         matches = gpd.read_file(path, engine='pyogrio', bbox=bbox, columns=['gov', 'sec', 'requestnumber'])
                                         
-                                        st.session_state.custom_marker = [search_y, search_x] # [Lat, Lon] for Marker
+                                        st.session_state.custom_marker = [search_y, search_x]
 
                                         if not matches.empty:
                                             match = matches.iloc[0]
                                             t_gov, t_sec = match['gov'], match['sec']
-                                            t_req = match['requestnumber']
                                             
                                             st.session_state.search_gov = t_gov
                                             st.session_state.search_sec = t_sec
@@ -324,12 +350,12 @@ def main():
                                             st.session_state.custom_center = (search_x, search_y)
                                             st.success(f"📍 إحداثيات صحيحة! موجود في: {t_gov} - {t_sec}")
                                         else:
-                                             st.warning("⚠️ الموقع لا يحتوي على طلبات مسجلة (سيتم التوجيه فقط)")
+                                             st.warning("⚠️ الموقع لا يحتوي على طلبات (سيتم التوجيه فقط)")
                                              st.session_state.custom_center = (search_x, search_y)
                                 else:
-                                    st.error("❌ رقم الطلب غير موجود")
+                                    st.error("❌ صيغة الإحداثيات غير صحيحة")
                             except ValueError:
-                                st.error("❌ صيغة غير صحيحة")
+                                st.error("❌ تأكد من كتابة أرقام صحيحة")
 
             with col1:
                 sel_gov = st.selectbox("🏛️ المحافظة", ["عرض الكل"] + govs, index=0 if "search_gov" not in st.session_state else (govs.index(st.session_state.search_gov) + 1 if st.session_state.search_gov in govs else 0), key="gov_select")
@@ -359,16 +385,10 @@ def main():
                 
                 
 
-            # Selection Info & Clear (Hidden logic, UI via Map Button)
+            # Selection Info & Clear (Global Reset via Map Button)
             if st.session_state.selected_requests:
                 st.markdown(f'<div style="text-align:center; color:#4CAF50; font-weight:bold; margin-top:5px;">📌 محدد: {len(st.session_state.selected_requests)} طلب</div>', unsafe_allow_html=True)
-                
-                # Floating Button (using query params for clean interaction)
-                st.markdown("""
-                    <a href="?clear_selection=true" target="_self" style="text-decoration:none;">
-                        <div class="delete-btn" title="مسح التحديد">🗑️</div>
-                    </a>
-                """, unsafe_allow_html=True)
+                # Floating Button REMOVED -> Moved to Map Control
 
             # CSV Export: Removed as per request
 
@@ -455,6 +475,10 @@ def main():
                         ).add_to(m)
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
+                    
+                    # Add Clear Selection Button (Custom Control)
+                    if st.session_state.selected_requests or "custom_marker" in st.session_state or "custom_center" in st.session_state:
+                         ClearButton().add_to(m)
                     
                     # Add ONLY Google Satellite (no OpenStreetMap)
                     folium.TileLayer(

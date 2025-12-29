@@ -707,7 +707,7 @@ if 'filtered_gdf' in locals() and filtered_gdf is not None:
 
             # إنشاء الخريطة
             m = leafmap.Map(center=st.session_state['map_center'], zoom=st.session_state['map_zoom'])
-            m.add_basemap("SATELLITE") 
+            m.add_basemap("HYBRID") 
             
             # إضافة زر "موقعي" للخريطة
             from folium.plugins import LocateControl

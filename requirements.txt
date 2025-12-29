@@ -1,9 +1,5 @@
-streamlit
-geopandas
-pyogrio
+streamlit==1.41.0
+geopandas==1.0.1
 pandas
 folium
 streamlit-folium
-rtree
-pyarrow
-psutil

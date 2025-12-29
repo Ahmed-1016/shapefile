@@ -1,47 +1,32 @@
 import streamlit as st
+import geopandas as gpd
+import pandas as pd
 import os
-import sys
 
-# Disable the large file loading by default to prevent OOM
-st.set_page_config(page_title="GIS Bootstrapper", page_icon="🏗️")
+st.title("🚀 Baseline Environment Test")
 
-st.title("🏗️ GIS Service: Ultra-Minimal Bootstrapper")
+st.success("If you see this, the core libraries (Streamlit, Geopandas) are loaded!")
 
-st.write("This is a fail-safe version of the application. If you can see this, it means the basic Streamlit environment is working.")
+st.write("### Environment Details")
+st.write(f"CWD: {os.getcwd()}")
 
-st.sidebar.markdown("### 🔍 System Info")
-st.sidebar.write(f"Python Version: {sys.version}")
-st.sidebar.write(f"CPU Cores: {os.cpu_count()}")
-
-# Test imports only when clicked
-if st.button("🚀 Test GIS Libraries (Geopandas, etc.)"):
-    with st.spinner("Testing imports..."):
-        results = []
-        for lib in ["pandas", "geopandas", "pyogrio", "folium", "rtree"]:
-            try:
-                __import__(lib)
-                results.append(f"✅ {lib}: Success")
-            except Exception as e:
-                results.append(f"❌ {lib}: Failed ({str(e)})")
-        
-        for r in results:
-            st.write(r)
-
-st.write("---")
-st.write("### 📂 Data Discovery")
-found_files = []
-for root, dirs, files in os.walk("."):
-    for file in files:
-        if file.endswith(".gpkg"):
-            rel_path = os.path.join(root, file)
-            size = os.path.getsize(rel_path) / (1024*1024)
-            found_files.append((rel_path, size))
-
-if found_files:
-    for f, s in found_files:
-        st.write(f"📍 Found: `{f}` ({s:.2f} MB)")
+# Test Data access
+path = "assets/gis/13-12-2025.gpkg"
+if os.path.exists(path):
+    st.write(f"✅ Data file found: {path}")
+    st.write(f"Size: {os.path.getsize(path)/(1024*1024):.1f} MB")
 else:
-    st.error("❌ No `.gpkg` data files found in the repository!")
+    st.error("❌ Data file NOT found. Searching...")
+    for root, dirs, files in os.walk("."):
+        for f in files:
+            if f.endswith(".gpkg"):
+                st.write(f"Found at: {os.path.join(root, f)}")
 
-st.write("---")
-st.info("If this page loads but the main app crashes, the issue is 100% the RAM limit (1GB).")
+if st.button("Run Memory Intensive Test (Load GDF)"):
+    try:
+        with st.spinner("Loading 148MB file..."):
+            gdf = gpd.read_file(path)
+            st.write(f"✅ Success! Loaded {len(gdf)} rows.")
+            st.dataframe(gdf.head(10))
+    except Exception as e:
+        st.error(f"❌ Failed to load: {e}")

@@ -1,8 +1,2 @@
-gdal-bin
 libgdal-dev
-libspatialindex-dev
-python3-rtree
-libgeos-dev
-libproj-dev
-libsqlite3-dev
-binutils
+g++

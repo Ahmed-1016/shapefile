@@ -160,7 +160,7 @@ ASSETS_PATH = get_assets_path()
 @st.cache_data(ttl=3600)
 def load_meta(file_name, base_path):
     path = os.path.join(base_path, file_name)
-    return gpd.read_file(path, engine='pyogrio', columns=['gov', 'sec'], use_arrow=True)
+    return gpd.read_file(path, engine='pyogrio', columns=['gov', 'sec', 'requestnumber'], use_arrow=True)
 
 @st.cache_data(ttl=3600)
 def load_map_data(file_name, base_path, gov, sec):
@@ -186,6 +186,12 @@ def load_map_data(file_name, base_path, gov, sec):
 
 # 6. Main App
 def main():
+    # 0. Handle Query Params for Floating Button
+    if "clear_selection" in st.query_params:
+        st.session_state.selected_requests = []
+        st.query_params.clear()
+        st.rerun()
+
     # Top Bar
     st.markdown('<div class="top-header">مستعرض الخرائط (الماسة كونسلت)</div>', unsafe_allow_html=True)
 
@@ -199,45 +205,102 @@ def main():
     
     target_file = files[0]
 
+    # --- CSS for Floating Delete Button ---
+    st.markdown("""
+        <style>
+        .map-container { position: relative; }
+        .delete-btn {
+            position: absolute;
+            top: 20px;
+            right: 60px; /* Left of Fullscreen */
+            z-index: 9999;
+            background-color: white;
+            border: 2px solid rgba(0,0,0,0.2);
+            border-radius: 4px;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            transition: all 0.2s;
+        }
+        .delete-btn:hover { background-color: #f4f4f4; transform: scale(1.1); }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # --- GLOBAL SEARCH LOGIC ---
+    if 'search_query' not in st.session_state: st.session_state.search_query = ""
+
     # Control Section (عناصر التحكم والتصفية)
     st.markdown('<div class="controls-header">⚙️ عناصر التحكم والتصفية</div>', unsafe_allow_html=True)
     with st.container():
         st.markdown('<div class="controls-body">', unsafe_allow_html=True)
         
-        # Grid for dropdowns
-        col1, col2, col3 = st.columns([1, 1, 2])
+        # Grid for dropdowns + Global Search
+        col1, col2, col3 = st.columns([1, 1, 1.5])
         
         try:
             meta_df = load_meta(target_file, ASSETS_PATH)
+            # Ensure requestnumber is string for searching
+            meta_df['requestnumber'] = meta_df['requestnumber'].astype(str)
+            
             govs = sorted(meta_df['gov'].unique())
             
             with col1:
-                sel_gov = st.selectbox("🏛️ المحافظة", ["عرض الكل"] + govs)
+                sel_gov = st.selectbox("🏛️ المحافظة", ["عرض الكل"] + govs, index=0 if "search_gov" not in st.session_state else (govs.index(st.session_state.search_gov) + 1 if st.session_state.search_gov in govs else 0), key="gov_select")
             
             with col2:
                 if sel_gov != "عرض الكل":
                     secs = sorted(meta_df[meta_df['gov'] == sel_gov]['sec'].unique())
-                    sel_sec = st.selectbox("📍 القسم", ["عرض الكل"] + secs)
+                    current_idx = 0
+                    if "search_sec" in st.session_state and st.session_state.search_sec in secs:
+                        current_idx = secs.index(st.session_state.search_sec) + 1
+                    sel_sec = st.selectbox("📍 القسم", ["عرض الكل"] + secs, index=current_idx, key="sec_select")
                 else:
                     sel_sec = st.selectbox("📍 القسم", ["عرض الكل"], disabled=True)
             
             with col3:
-                # Display current selection count (read-only)
-                if st.session_state.selected_requests:
-                    st.info(f"📌 محدد حالياً: {len(st.session_state.selected_requests)} طلب")
-                else:
-                    st.info("💡 اضغط على الخريطة للتحديد")
+                # GLOBAL SEARCH INPUT
+                c_search, c_btn = st.columns([3, 1])
+                with c_search:
+                    search_id = st.text_input("🔍 بحث شامل (رقم الطلب)", placeholder="أدخل الرقم...", label_visibility="collapsed")
+                with c_btn:
+                    if st.button("بحث"):
+                        if search_id:
+                            # Search in META data globally
+                            found = meta_df[meta_df['requestnumber'] == search_id]
+                            if not found.empty:
+                                target_gov = found.iloc[0]['gov']
+                                target_sec = found.iloc[0]['sec']
+                                # Update Session State to trigger data load
+                                st.session_state.search_gov = target_gov
+                                st.session_state.search_sec = target_sec
+                                st.session_state.selected_requests = [search_id]
+                                st.session_state.target_req = search_id # Signal to zoom
+                                st.success(f"تم العثور عليه في: {target_gov} - {target_sec}")
+                                st.rerun()
+                            else:
+                                st.error("❌ غير موجود")
 
-            # Action Buttons
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                if st.button("🗑️ مسح التحديد", disabled=not st.session_state.selected_requests):
-                    st.session_state.selected_requests = []
-                    st.rerun()
-            with col_btn2:
-                if st.button("📥 تصدير CSV"):
-                    st.toast("جاري تحضير ملف البيانات...")
-            
+            # Selection Info & Clear (Hidden logic, UI via Map Button)
+            if st.session_state.selected_requests:
+                st.markdown(f'<div style="text-align:center; color:#4CAF50; font-weight:bold; margin-top:5px;">📌 محدد: {len(st.session_state.selected_requests)} طلب</div>', unsafe_allow_html=True)
+                
+                # Floating Button (using query params for clean interaction)
+                st.markdown("""
+                    <a href="?clear_selection=true" target="_self" style="text-decoration:none;">
+                        <div class="delete-btn" title="مسح التحديد">🗑️</div>
+                    </a>
+                """, unsafe_allow_html=True)
+
+            # CSV Export Button (Restored)
+            st.markdown('<div style="text-align: left; margin-top: 10px;">', unsafe_allow_html=True)
+            if st.button("📥 تصدير CSV"):
+                st.toast("جاري تحضير ملف البيانات (قريباً)...")
+            st.markdown('</div>', unsafe_allow_html=True)
+
             st.markdown('</div>', unsafe_allow_html=True) # End controls-body
 
             # Horizontal Legend
@@ -256,42 +319,8 @@ def main():
                     gdf_full, org_crs, org_bounds = load_map_data(target_file, ASSETS_PATH, sel_gov, sel_sec)
                 
                 if not gdf_full.empty:
-                    # --- SEARCH SECTION ---
-                    with st.expander("🔍 بحث متقدم (رقم الطلب / إحداثيات)", expanded=False):
-                        search_mode = st.radio("نوع البحث:", ["رقم الطلب", "إحداثيات (X, Y)"], horizontal=True)
-                        
-                        if search_mode == "رقم الطلب":
-                            req_input = st.text_input("أدخل رقم الطلب:")
-                            if st.button("🚀 بحث بالرقم"):
-                                if req_input in gdf_full['requestnumber'].astype(str).values:
-                                    target_geom = gdf_full[gdf_full['requestnumber'].astype(str) == req_input].geometry.iloc[0]
-                                    st.session_state.map_center = [target_geom.centroid.y, target_geom.centroid.x]
-                                    st.session_state.map_zoom = 18
-                                    st.session_state.selected_requests = [req_input]
-                                    st.success("✅ تم العثور على الطلب")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ رقم الطلب غير موجود في هذا القسم")
-                        
-                        else: # Coordinates Search
-                            c1, c2 = st.columns(2)
-                            with c1: x_in = st.number_input("X (Projected):", value=org_bounds[0])
-                            with c2: y_in = st.number_input("Y (Projected):", value=org_bounds[1])
-                            
-                            if st.button("📍 بحث بالإحداثيات"):
-                                # Validation
-                                if (org_bounds[0] <= x_in <= org_bounds[2]) and (org_bounds[1] <= y_in <= org_bounds[3]):
-                                    # Transform to WGS84 for Folium
-                                    transformer = Transformer.from_crs(org_crs, "EPSG:4326", always_xy=True)
-                                    lon, lat = transformer.transform(x_in, y_in)
-                                    
-                                    st.session_state.map_center = [lat, lon]
-                                    st.session_state.map_zoom = 18
-                                    st.success(f"✅ إحداثيات صحيحة! تم التوجيه إلى: {lat:.5f}, {lon:.5f}")
-                                    st.rerun()
-                                else:
-                                    st.error(f"⚠️ الإحداثيات خارج نطاق هذا القسم.")
-                                    st.info(f"النطاق المسموح: X[{org_bounds[0]:.1f} - {org_bounds[2]:.1f}], Y[{org_bounds[1]:.1f} - {org_bounds[3]:.1f}]")
+                    
+                    # 1. Memory Optimization for Folium
 
                     # 1. Memory Optimization for Folium
                     # We create a lightweight copy ONLY for the map to prevent ArrayMemoryError
@@ -302,7 +331,21 @@ def main():
 
 
                     center = [gdf_map.geometry.centroid.y.mean(), gdf_map.geometry.centroid.x.mean()]
-                    m = folium.Map(location=center, zoom_start=14, tiles=None)
+                    zoom = 16
+                    
+                    # Handle Global Search Zoom
+                    if "target_req" in st.session_state and st.session_state.target_req:
+                        target = st.session_state.target_req
+                        # Find geometry in current gdf_full
+                        found = gdf_full[gdf_full['requestnumber'].astype(str) == str(target)]
+                        if not found.empty:
+                            geom = found.geometry.iloc[0]
+                            center = [geom.centroid.y, geom.centroid.x]
+                            zoom = 19
+                        # Reset target to avoid permanent lock
+                        st.session_state.target_req = None
+
+                    m = folium.Map(location=center, zoom_start=zoom, tiles=None)
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
                     

@@ -170,6 +170,10 @@ def load_map_data(file_name, base_path, gov, sec):
     else: gdf = gdf.to_crs(epsg=4326)
     gdf['status_color'] = gdf['survey_review_status'].apply(get_color)
 
+    # Force IDs to string for reliable selection logic
+    if 'requestnumber' in gdf.columns:
+        gdf['requestnumber'] = gdf['requestnumber'].astype(str)
+
     # JSON Cleanup for Dates
     for col in gdf.columns:
         if pd.api.types.is_datetime64_any_dtype(gdf[col]) or gdf[col].dtype == object:
@@ -216,13 +220,8 @@ def main():
                     sel_sec = st.selectbox("📍 القسم", ["عرض الكل"], disabled=True)
             
             with col3:
-                # Search / Multi-select
-                # Check for updates and sync Sidebar selections
-                if sel_gov != "عرض الكل" and sel_sec != "عرض الكل":
-                    # Lazy loading for large dropdown
-                    pass
-                
-                selected_ids = st.multiselect("🔍 بحث (رقم الطلب...)", options=st.session_state.selected_requests + ["..."])
+                # Search box moved to Map context for better sync
+                pass
 
             # CSV Export Button
             st.markdown('<div style="text-align: left;">', unsafe_allow_html=True)
@@ -323,7 +322,7 @@ def main():
                     if new_click and new_click != st.session_state.last_click:
                         st.session_state.last_click = new_click
                         if "properties" in new_click and "requestnumber" in new_click["properties"]:
-                            req = new_click["properties"]["requestnumber"]
+                            req = str(new_click["properties"]["requestnumber"])
                             # REPLACEMENT logic: Selection becomes only this request
                             st.session_state.selected_requests = [req]
                             st.rerun()

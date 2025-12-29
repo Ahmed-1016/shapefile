@@ -88,7 +88,8 @@ st.markdown("""
         color: white;
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start; /* Left Aligned */
+        padding-left: 25px; /* Margin from left */
         font-weight: bold;
         z-index: 1000;
         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
@@ -103,7 +104,9 @@ st.markdown("""
         margin-bottom: 20px;
         display: flex;
         align-items: center;
+        justify-content: flex-start; /* Ensure left align */
         gap: 15px;
+        direction: ltr; /* Force LTR for English/Mixed title */
     }
     .status-dot {
         height: 35px;
@@ -151,14 +154,26 @@ st.markdown("""
     .legend-item { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 0.95rem; }
     .dot { height: 15px; width: 15px; border-radius: 50%; display: inline-block; }
     
-    /* CSV Button Styling */
-    .stButton button {
-        background-color: #00E676 !important;
-        color: #0A1128 !important;
-        font-weight: bold !important;
+    /* Search Button Valid Styling */
+    div[data-testid="stFormSubmitButton"] button {
+        background: linear-gradient(135deg, #29B6F6 0%, #0288D1 100%) !important;
+        color: white !important;
+        border-radius: 25px !important;
         border: none !important;
+        padding: 0.6rem 2rem !important;
+        font-size: 1.1rem !important;
+        box-shadow: 0 4px 15px rgba(2, 136, 209, 0.4) !important;
+        transition: transform 0.2s, box-shadow 0.2s !important;
+        width: 100%;
+    }
+    div[data-testid="stFormSubmitButton"] button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(2, 136, 209, 0.6) !important;
+    }
+
+    /* Generic Button Styling */
+    .stButton button {
         border-radius: 8px !important;
-        padding: 0.5rem 2rem !important;
     }
 
     /* Hide Sidebar elements if any */

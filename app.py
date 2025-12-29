@@ -310,7 +310,10 @@ def main():
                     if map_out and map_out.get('zoom'):
                         st.session_state.map_zoom = map_out['zoom']
 
-                    # 3. Handle Map Interaction
+                    # 3. Handle Map Interaction (WITHOUT RERUN)
+                    
+                    # Determine current selection based on map interactions
+                    current_selection = []
                     
                     # A. Spatial Selection (Drawing) - Every new drawing REPLACES the current selection
                     new_drawings = map_out.get("all_drawings")
@@ -321,12 +324,11 @@ def main():
                         if "geometry" in last_draw:
                             draw_geom = shape(last_draw["geometry"])
                             # Find all request numbers within the drawing
-                            # Intersection check
                             mask = gdf_full.geometry.apply(lambda x: draw_geom.contains(x) or x.intersects(draw_geom))
                             found_ids = gdf_full[mask]['requestnumber'].tolist()
                             if found_ids:
+                                current_selection = found_ids
                                 st.session_state.selected_requests = found_ids
-                                st.rerun()
 
                     # B. Click Selection - Every new click REPLACES the current selection
                     new_click = map_out.get("last_object_clicked")
@@ -334,14 +336,16 @@ def main():
                         st.session_state.last_click = new_click
                         if "properties" in new_click and "requestnumber" in new_click["properties"]:
                             req = str(new_click["properties"]["requestnumber"])
-                            # REPLACEMENT logic: Selection becomes only this request
+                            current_selection = [req]
                             st.session_state.selected_requests = [req]
-                            st.rerun()
+                    
+                    # Use current selection if available, otherwise use session state
+                    display_selection = current_selection if current_selection else st.session_state.selected_requests
 
-                    # Table
-                    if st.session_state.selected_requests:
+                    # Table - Display immediately based on current interaction
+                    if display_selection:
                         st.subheader("📋 بيانات الطلبات المختارة")
-                        display_df = gdf_full[gdf_full['requestnumber'].isin(st.session_state.selected_requests)]
+                        display_df = gdf_full[gdf_full['requestnumber'].isin(display_selection)]
                         
                         # Apply Arabic Names Mapping
                         field_names = {

@@ -267,15 +267,17 @@ def main():
                             st.rerun()
 
                     center = [gdf_map.geometry.centroid.y.mean(), gdf_map.geometry.centroid.x.mean()]
-                    m = folium.Map(location=center, zoom_start=14)
+                    m = folium.Map(location=center, zoom_start=14, tiles=None)
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
                     
+                    # Add ONLY Google Satellite (no OpenStreetMap)
                     folium.TileLayer(
                         tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
                         attr="Google Satellite",
                         name="Satellite View",
-                        overlay=False, control=True
+                        overlay=False, 
+                        control=False  # Hide layer control since we only have one layer
                     ).add_to(m)
 
                     Draw(

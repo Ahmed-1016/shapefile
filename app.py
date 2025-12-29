@@ -324,6 +324,7 @@ def main():
                                             else:
                                                  st.warning("⚠️ الموقع لا يحتوي على طلبات مسجلة (سيتم التوجيه فقط)")
                                                  st.session_state.custom_center = (search_x, search_y)
+                                                 st.session_state.map_id += 1 # Force Map Reset
                                     else:
                                         st.error("❌ رقم الطلب غير موجود")
                                 except ValueError:
@@ -400,14 +401,17 @@ def main():
                             zoom = 19
                         st.session_state.target_req = None
 
-                    # Handle Custom Coordinate Zoom
+                    # Handle Custom Coordinate Zoom (Using FitBounds for accuracy)
                     if "custom_center" in st.session_state:
                          try:
                              cx, cy = st.session_state.custom_center
                              # GeoPackage is 4326, so (cx, cy) are (Lon, Lat)
                              # Folium takes (Lat, Lon)
                              center = [cy, cx]
-                             zoom = 19
+                             
+                             # Force viewport around pin
+                             m.fit_bounds([[cy, cx], [cy, cx]], max_zoom=19)
+                             
                              st.success(f"📍 تم التوجيه للإحداثيات: {cy}, {cx}")
                              del st.session_state.custom_center
                          except Exception as e:

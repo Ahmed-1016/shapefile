@@ -17,6 +17,8 @@ if 'selected_requests' not in st.session_state:
     st.session_state.selected_requests = []
 if 'last_click' not in st.session_state:
     st.session_state.last_click = None
+if 'last_draw' not in st.session_state:
+    st.session_state.last_draw = None
 
 # 2. Lazy Imports
 try:
@@ -310,15 +312,31 @@ def main():
                     map_out = st_folium(m, height=520, width='100%', key="main_map")
 
                     # 3. Handle Map Interaction
+                    
+                    # A. Spatial Selection (Drawing) - Every new drawing REPLACES the current selection
+                    new_drawings = map_out.get("all_drawings")
+                    if new_drawings and str(new_drawings) != st.session_state.last_draw:
+                        st.session_state.last_draw = str(new_drawings)
+                        # Process the latest drawing
+                        last_draw = new_drawings[-1] # Get most recent
+                        if "geometry" in last_draw:
+                            draw_geom = shape(last_draw["geometry"])
+                            # Find all request numbers within the drawing
+                            # Intersection check
+                            mask = gdf_full.geometry.apply(lambda x: draw_geom.contains(x) or x.intersects(draw_geom))
+                            found_ids = gdf_full[mask]['requestnumber'].tolist()
+                            if found_ids:
+                                st.session_state.selected_requests = found_ids
+                                st.rerun()
+
+                    # B. Click Selection - Every new click REPLACES the current selection
                     new_click = map_out.get("last_object_clicked")
                     if new_click and new_click != st.session_state.last_click:
                         st.session_state.last_click = new_click
                         if "properties" in new_click and "requestnumber" in new_click["properties"]:
                             req = new_click["properties"]["requestnumber"]
-                            curr_list = list(st.session_state.selected_requests)
-                            if req in curr_list: curr_list.remove(req)
-                            else: curr_list.append(req)
-                            st.session_state.selected_requests = curr_list
+                            # REPLACEMENT logic: Selection becomes only this request
+                            st.session_state.selected_requests = [req]
                             st.rerun()
 
                     # Table

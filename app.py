@@ -401,23 +401,24 @@ def main():
                             zoom = 19
                         st.session_state.target_req = None
 
-                    # Handle Custom Coordinate Zoom (Using FitBounds for accuracy)
+                    # Handle Custom Coordinate Zoom (Center Calculation)
                     if "custom_center" in st.session_state:
                          try:
                              cx, cy = st.session_state.custom_center
-                             # GeoPackage is 4326, so (cx, cy) are (Lon, Lat)
-                             # Folium takes (Lat, Lon)
                              center = [cy, cx]
-                             
-                             # Force viewport around pin
+                         except: pass
+
+                    m = folium.Map(location=center, zoom_start=zoom, tiles=None)
+
+                    # Apply Fit Bounds (Must be after map init)
+                    if "custom_center" in st.session_state:
+                         try:
+                             cx, cy = st.session_state.custom_center
                              m.fit_bounds([[cy, cx], [cy, cx]], max_zoom=19)
-                             
                              st.success(f"📍 تم التوجيه للإحداثيات: {cy}, {cx}")
                              del st.session_state.custom_center
                          except Exception as e:
                              st.error(f"خطأ: {e}")
-
-                    m = folium.Map(location=center, zoom_start=zoom, tiles=None)
                     
                     # Add Custom Marker if exists (Searched Location)
                     if "custom_marker" in st.session_state and st.session_state.custom_marker:

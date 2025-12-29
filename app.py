@@ -170,14 +170,17 @@ def main():
 
                     # UPDATE SELECTION STATE
                     if map_out.get("last_object_clicked"):
-                        clicked_req = map_out["last_object_clicked"]["properties"]["requestnumber"]
-                        
-                        # Use a small logic to toggle the ID in the session state set
-                        if clicked_req in st.session_state.selected_requests:
-                            st.session_state.selected_requests.remove(clicked_req)
-                        else:
-                            st.session_state.selected_requests.add(clicked_req)
-                        st.rerun()
+                        clicked_obj = map_out["last_object_clicked"]
+                        # Robust check: ensure 'properties' exists and contains 'requestnumber'
+                        if "properties" in clicked_obj and "requestnumber" in clicked_obj["properties"]:
+                            clicked_req = clicked_obj["properties"]["requestnumber"]
+                            
+                            # Toggle selection
+                            if clicked_req in st.session_state.selected_requests:
+                                st.session_state.selected_requests.remove(clicked_req)
+                            else:
+                                st.session_state.selected_requests.add(clicked_req)
+                            st.rerun()
 
                     # DISPLAY SELECTED DATA
                     st.divider()

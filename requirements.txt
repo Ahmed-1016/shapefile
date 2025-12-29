@@ -5,3 +5,5 @@ leafmap
 pandas
 folium
 streamlit-folium
+rtree
+pyarrow

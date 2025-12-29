@@ -4,6 +4,10 @@ import leafmap.foliumap as leafmap
 import os
 import json
 import pandas as pd
+import folium
+from folium.plugins import LocateControl, Draw
+from streamlit_folium import st_folium
+import shapely.geometry as sg
 
 # ضبط إعدادات الصفحة
 st.set_page_config(
@@ -551,53 +555,34 @@ FIELD_NAMES_AR = {
 @st.cache_data
 def load_data(file_name):
     path = os.path.join(ASSETS_PATH, file_name)
-    # معلومات تصحيح المسارات
-    st.sidebar.info(f"📁 Current DIR: {os.getcwd()}")
-    st.sidebar.info(f"📍 Assets Path: {path}")
+    
+    # التحقق من وجود الملف وحجمه
+    if not os.path.exists(path):
+        return None, f"❌ الملف غير موجود في المسار: {path}"
 
-    # التحقق من وجود الملف وحجمه قبل القراءة
-    if os.path.exists(path):
-        size_mb = os.path.getsize(path) / (1024 * 1024)
-        st.write(f"📁 تحميل الملف: {file_name} ({size_mb:.1f} MB)")
-    else:
-        st.error(f"❌ الملف غير موجود في المسار: {path}")
-        # عرض محتويات المجلد للمساعدة في التصحيح
-        if os.path.exists(ASSETS_PATH):
-            st.write(f"📂 محتويات مجلد Assets: {os.listdir(ASSETS_PATH)}")
-        else:
-            st.write(f"⚠️ مجلد Assets غير موجود أصلاً في: {ASSETS_PATH}")
-        return None
+    if os.path.getsize(path) < 1000:
+         return None, "⚠️ يبدو أن الملف لم يتم تحميله بالكامل من Git LFS."
 
     try:
-        # التحقق إذا كان الملف مجرد "Pointer" لـ Git LFS (حجمه صغير جداً)
-        if os.path.getsize(path) < 1000:
-             st.error("⚠️ يبدو أن الملف لم يتم تحميله بالكامل من Git LFS. تأكد من تفعيل LFS في مستودع GitHub.")
-             return None
-
-        # تحديد الأعمدة الضرورية فقط لتقليل استهلاك الذاكرة
+        # تحديد الأعمدة الضرورية
         essential_columns = [
             'geometry', 'requestnumber', 'gov', 'sec', 'survey_review_status'
         ]
         
-        # محاولة القراءة بمحرك pyogrio السريع أولاً
+        # محاولة القراءة بمحرك pyogrio
         try:
             gdf = gpd.read_file(path, engine='pyogrio', columns=essential_columns)
         except Exception:
-            # Fallback للمحرك العادي إذا فشل pyogrio
             gdf = gpd.read_file(path)
-            # اختيار الأعمدة يدوياً في حالة الـ fallback
             existing_cols = [c for c in essential_columns if c in gdf.columns]
             gdf = gdf[existing_cols]
         
-        # تبسيط الأشكال الهندسية لتقليل حجم البيانات المرسلة للمتصفح
-        # (تقليل الدقة بمقدار 0.0001 درجة - حوالي 10 أمتار)
+        # تبسيط الأشكال
         gdf['geometry'] = gdf['geometry'].simplify(0.0001, preserve_topology=True)
 
-        # التأكد من وجود عمود الحالة
         if 'survey_review_status' not in gdf.columns:
              gdf['survey_review_status'] = ''
 
-        # حل مشكلة الـ Timestamp
         for col in gdf.columns:
             if col == 'geometry': continue
             if pd.api.types.is_datetime64_any_dtype(gdf[col]):
@@ -605,22 +590,19 @@ def load_data(file_name):
             elif gdf[col].dtype == 'object':
                 gdf[col] = gdf[col].astype(str).replace('nan', '')
 
-        # نظام الإحداثيات
         if gdf.crs is None:
             gdf.set_crs(epsg=4326, inplace=True)
         else:
             gdf = gdf.to_crs(epsg=4326)
             
-        # بناء الفهرس المكاني (Spatial Index) بأمان
         try:
              _ = gdf.sindex 
-        except Exception as si_err:
-             st.sidebar.warning(f"⚠️ Spatial Index warning: {si_err}")
+        except:
+             pass
         
-        return gdf
+        return gdf, None
     except Exception as e:
-        st.error(f"❌ خطأ تقني في قراءة البيانات: {str(e)}")
-        return None
+        return None, f"❌ خطأ تقني: {str(e)}"
 
 # الحصول على قائمة الملفات المتاحة
 if os.path.exists(ASSETS_PATH):
@@ -652,7 +634,9 @@ with st.expander("⚙️ عناصر التحكم والتصفية", expanded=Tru
     
     if selected_file:
         with st.spinner("⏳ جاري تحميل البيانات..."):
-            gdf = load_data(selected_file)
+            gdf, error = load_data(selected_file)
+            if error:
+                 st.error(error)
             
         if gdf is not None:
             st.divider()
@@ -742,8 +726,6 @@ if 'filtered_gdf' in locals() and filtered_gdf is not None:
             m = leafmap.Map(center=st.session_state['map_center'], zoom=st.session_state['map_zoom'])
             m.add_basemap("HYBRID") 
             
-            # إضافة زر "موقعي" للخريطة
-            from folium.plugins import LocateControl
             LocateControl(
                 auto_start=False,
                 position='topleft',
@@ -798,16 +780,6 @@ if 'filtered_gdf' in locals() and filtered_gdf is not None:
                 tooltip=tooltip
             ).add_to(m)
             
-            from folium.plugins import Draw
-            draw = Draw(
-                export=False,
-                position='topleft',
-                draw_options={'polyline': False, 'rectangle': True, 'polygon': True, 'circle': False, 'marker': False, 'circlemarker': False},
-                edit_options={'edit': False, 'remove': True}
-            )
-            m.add_child(draw)
-
-            from streamlit_folium import st_folium
             output = st_folium(
                 m,
                 height=600,
@@ -833,7 +805,6 @@ if 'filtered_gdf' in locals() and filtered_gdf is not None:
             # 2. التحديد بالسحب
             if output and output.get("all_drawings"):
                 with st.spinner("⏳ جاري تحليل المنطقة..."):
-                    import shapely.geometry as sg
                     new_found = False
                     for drawing in output["all_drawings"]:
                         geom_type = drawing['geometry']['type']

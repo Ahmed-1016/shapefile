@@ -551,12 +551,21 @@ FIELD_NAMES_AR = {
 @st.cache_data
 def load_data(file_name):
     path = os.path.join(ASSETS_PATH, file_name)
+    # معلومات تصحيح المسارات
+    st.sidebar.info(f"📁 Current DIR: {os.getcwd()}")
+    st.sidebar.info(f"📍 Assets Path: {path}")
+
     # التحقق من وجود الملف وحجمه قبل القراءة
     if os.path.exists(path):
         size_mb = os.path.getsize(path) / (1024 * 1024)
         st.write(f"📁 تحميل الملف: {file_name} ({size_mb:.1f} MB)")
     else:
         st.error(f"❌ الملف غير موجود في المسار: {path}")
+        # عرض محتويات المجلد للمساعدة في التصحيح
+        if os.path.exists(ASSETS_PATH):
+            st.write(f"📂 محتويات مجلد Assets: {os.listdir(ASSETS_PATH)}")
+        else:
+            st.write(f"⚠️ مجلد Assets غير موجود أصلاً في: {ASSETS_PATH}")
         return None
 
     try:

@@ -45,15 +45,14 @@ class ClearButton(MacroElement):
     _template = Template("""
         {% macro script(this, kwargs) %}
             var clearBtn = L.Control.extend({
-                options: { position: 'topleft' },
+                options: { position: 'topright' },
                 onAdd: function (map) {
                     var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
                     container.style.backgroundColor = 'white'; 
                     container.style.width = '30px'; 
                     container.style.height = '30px';
-                    container.style.marginTop = '80px';
                     container.style.cursor = 'pointer';
-                    container.innerHTML = '<a href="?clear_selection=true" title="محو التحديد" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; text-decoration:none; color:black; font-weight:bold; font-size:18px;">🗑️</a>';
+                    container.innerHTML = '<a href="?clear_selection=true" title="محو التحديد" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; text-decoration:none; color:black; font-weight:bold; font-size:18px;">❌</a>';
                     return container;
                 }
             });
@@ -237,28 +236,42 @@ def main():
     
     target_file = files[0]
 
-    # --- CSS for Floating Delete Button ---
+    # --- CSS for Integrated Map Button (Overlay Strategy) ---
     st.markdown("""
         <style>
-        .map-container { position: relative; }
-        .delete-btn {
+        .map-overlay {
+            position: relative;
+            width: 100%;
+            height: 0;
+            z-index: 999; /* Above Folium Iframe */
+            pointer-events: none; /* Let clicks pass through empty areas */
+        }
+        .map-btn-group {
             position: absolute;
-            top: 20px;
-            right: 60px; /* Left of Fullscreen */
-            z-index: 9999;
+            top: 60px; /* Below Fullscreen Control (approx) */
+            right: 10px; /* Align with Leaflet controls */
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            pointer-events: auto; /* Re-enable clicks for buttons */
+        }
+        .custom-map-btn {
             background-color: white;
-            border: 2px solid rgba(0,0,0,0.2);
-            border-radius: 4px;
-            width: 34px;
+            width: 34px; /* Match standard Leaflet size */
             height: 34px;
+            border-radius: 4px;
+            border: 2px solid rgba(0,0,0,0.2);
+            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+            font-size: 18px;
+            color: #333;
+            text-decoration: none !important;
             transition: all 0.2s;
         }
-        .delete-btn:hover { background-color: #f4f4f4; transform: scale(1.1); }
+        .custom-map-btn:hover { background-color: #f4f4f4; color: #d32f2f; border-color: #d32f2f; }
         </style>
     """, unsafe_allow_html=True)
     
@@ -392,13 +405,12 @@ def main():
                 
                 
 
-            # Selection Info & Clear (Global Reset via Map Button)
-            if st.session_state.selected_requests:
-                st.markdown(f'<div style="text-align:center; color:#4CAF50; font-weight:bold; margin-top:5px;">📌 محدد: {len(st.session_state.selected_requests)} طلب</div>', unsafe_allow_html=True)
-                # Floating Button REMOVED -> Moved to Map Control
-
-            # CSV Export: Removed as per request
-
+            # Selection Info
+            if st.session_state.selected_requests or "custom_marker" in st.session_state or "custom_center" in st.session_state:
+                count = len(st.session_state.selected_requests)
+                label = f"{count} طلب" if count > 0 else "بحث"
+                st.markdown(f'<div style="text-align:center; color:#4CAF50; font-weight:bold; margin-top:5px;">📌 محدد: {label}</div>', unsafe_allow_html=True)
+                
             st.markdown('</div>', unsafe_allow_html=True) # End controls-body
 
             # Horizontal Legend
@@ -483,9 +495,9 @@ def main():
                     LocateControl(auto_start=False).add_to(m)
                     Fullscreen(position='topright', title='ملء الشاشة', title_cancel='إغلاق', force_separate_button=True).add_to(m)
                     
-                    # Add Clear Selection Button (Custom Control) 
-                    if st.session_state.selected_requests or "custom_marker" in st.session_state or "custom_center" in st.session_state:
-                         ClearButton().add_to(m)
+                    # Add Clear Selection Button (Custom Control) - DISABLED temporarily for debug
+                    # if st.session_state.selected_requests or "custom_marker" in st.session_state or "custom_center" in st.session_state:
+                    #      ClearButton().add_to(m)
                     
                     # Add ONLY Google Satellite (no OpenStreetMap)
                     folium.TileLayer(
@@ -518,6 +530,19 @@ def main():
                             aliases=['الطلب:', 'الحالة:', 'التاريخ:'], localize=True
                         )
                     ).add_to(m)
+
+                    # --- OVERLAY BUTTON INJECTION ---
+                    # Visually integrated into the map's control group
+                    if st.session_state.selected_requests or "custom_marker" in st.session_state or "custom_center" in st.session_state:
+                        st.markdown(f"""
+                        <div class="map-overlay">
+                            <div class="map-btn-group">
+                                <a href="?clear_selection=true" target="_self" class="custom-map-btn" title="مسح التحديد وإعادة الهيئة">
+                                    🗑️
+                                </a>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                     map_out = st_folium(m, height=520, width='100%', key="main_map")
 

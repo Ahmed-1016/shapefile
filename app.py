@@ -1,40 +1,47 @@
 import streamlit as st
-import sys
 import os
+import sys
 
-st.title("🛡️ Minimal Boot Test")
+# Disable the large file loading by default to prevent OOM
+st.set_page_config(page_title="GIS Bootstrapper", page_icon="🏗️")
 
-st.write("### 1. System Check")
-st.write(f"Python: {sys.version}")
-st.write(f"CWD: {os.getcwd()}")
+st.title("🏗️ GIS Service: Ultra-Minimal Bootstrapper")
 
-st.write("### 2. Library Import Test")
+st.write("This is a fail-safe version of the application. If you can see this, it means the basic Streamlit environment is working.")
 
-def test_import(name):
-    try:
-        __import__(name)
-        st.success(f"✅ {name} imported successfully")
-        return True
-    except Exception as e:
-        st.error(f"❌ {name} failed: {e}")
-        return False
+st.sidebar.markdown("### 🔍 System Info")
+st.sidebar.write(f"Python Version: {sys.version}")
+st.sidebar.write(f"CPU Cores: {os.cpu_count()}")
 
-libs = ["pandas", "geopandas", "folium", "streamlit_folium", "pyogrio", "rtree"]
+# Test imports only when clicked
+if st.button("🚀 Test GIS Libraries (Geopandas, etc.)"):
+    with st.spinner("Testing imports..."):
+        results = []
+        for lib in ["pandas", "geopandas", "pyogrio", "folium", "rtree"]:
+            try:
+                __import__(lib)
+                results.append(f"✅ {lib}: Success")
+            except Exception as e:
+                results.append(f"❌ {lib}: Failed ({str(e)})")
+        
+        for r in results:
+            st.write(r)
 
-for lib in libs:
-    test_import(lib)
+st.write("---")
+st.write("### 📂 Data Discovery")
+found_files = []
+for root, dirs, files in os.walk("."):
+    for file in files:
+        if file.endswith(".gpkg"):
+            rel_path = os.path.join(root, file)
+            size = os.path.getsize(rel_path) / (1024*1024)
+            found_files.append((rel_path, size))
 
-st.write("### 3. Data File Discovery")
-path = "assets/gis/13-12-2025.gpkg"
-if os.path.exists(path):
-    size = os.path.getsize(path) / (1024*1024)
-    st.success(f"✅ Found data file: {path} ({size:.2f} MB)")
+if found_files:
+    for f, s in found_files:
+        st.write(f"📍 Found: `{f}` ({s:.2f} MB)")
 else:
-    st.warning(f"⚠️ Data file not found at: {path}")
-    # Search for any gpkg
-    for root, dirs, files in os.walk("."):
-        for file in files:
-            if file.endswith(".gpkg"):
-                st.write(f"Found: {os.path.join(root, file)}")
+    st.error("❌ No `.gpkg` data files found in the repository!")
 
-st.info("If you see this page, the environment is healthy. The crash is likely due to RAM exhaustion when loading the full map.")
+st.write("---")
+st.info("If this page loads but the main app crashes, the issue is 100% the RAM limit (1GB).")

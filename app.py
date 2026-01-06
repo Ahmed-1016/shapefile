@@ -2,7 +2,7 @@ import streamlit as st
 import os
 
 # --- APP VERSION ---
-VERSION = "2.4.0 (Premium Redesign)"
+VERSION = "2.5.0 (Clean Light Theme)"
 
 # 1. Page Config
 st.set_page_config(
@@ -68,116 +68,176 @@ st.markdown("""
     
     /* Global Styles */
     html, body, [class*="css"] { 
-        font-family: 'Cairo', sans-serif; 
+        font-family: 'Cairo', 'Inter', sans-serif; 
         direction: rtl; 
         text-align: right; 
+        color: #0f172a; /* Slate 900 */
     }
     .stApp { 
-        background-color: #0A1128; 
-        color: white; 
+        background-color: #f8fafc; /* Slate 50 */
+        color: #0f172a; 
+        background-image: 
+            radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.03) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.03) 0px, transparent 50%);
+        background-attachment: fixed;
     }
     
-    /* Top Green Header Bar */
+    /* Top White Header Bar */
     .top-header {
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
-        height: 50px;
-        background-color: #00BFA5;
-        color: white;
+        height: 60px;
+        background-color: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        color: #0f172a;
         display: flex;
         align-items: center;
-        justify-content: flex-start; /* Left Aligned */
-        padding-left: 25px; /* Margin from left */
-        font-weight: bold;
+        justify-content: flex-start;
+        padding-left: 24px;
+        font-weight: 800;
         z-index: 1000;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        border-bottom: 1px solid #e2e8f0; /* Slate 200 */
     }
-    .main .block-container { padding-top: 70px; }
+    .main .block-container { padding-top: 80px; }
 
     /* Main Title Styling */
     .main-title {
-        color: #C6FF00;
+        color: #0f172a; /* Slate 900 */
         font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 20px;
+        font-weight: 800;
+        margin-bottom: 24px;
         display: flex;
         align-items: center;
-        justify-content: flex-start; /* Ensure left align */
+        justify-content: flex-start;
         gap: 15px;
         direction: ltr; /* Force LTR for English/Mixed title */
+        letter-spacing: -0.025em;
     }
     .status-dot {
-        height: 35px;
-        width: 35px;
-        background-color: #C6FF00;
+        height: 12px;
+        width: 12px;
+        background-color: #10b981; /* Emerald 500 */
         border-radius: 50%;
         display: inline-block;
-        box-shadow: 0 0 15px #C6FF00;
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
     }
 
-    /* Control Elements Container */
+    /* Control Elements Container (Card Style) */
     .controls-header {
-        background-color: white;
-        color: #333;
-        padding: 10px 20px;
-        border-radius: 8px 8px 0 0;
-        font-weight: 600;
+        background-color: #ffffff;
+        color: #0f172a;
+        padding: 20px 24px 10px;
+        border-radius: 1.5rem 1.5rem 0 0;
+        font-weight: 700;
+        font-size: 1.1rem;
         display: flex;
         align-items: center;
         gap: 10px;
         margin-bottom: 0;
+        border: 1px solid #eff6ff;
+        border-bottom: none;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
     }
     .controls-body {
-        background-color: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 25px;
-        border-radius: 0 0 8px 8px;
+        background-color: #ffffff;
+        border: 1px solid #eff6ff;
+        border-top: none;
+        padding: 0 24px 24px;
+        border-radius: 0 0 1.5rem 1.5rem;
         margin-bottom: 30px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.02), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
     }
 
     /* Input Styling */
-    .stSelectbox label, .stMultiSelect label { color: white !important; font-size: 0.9rem !important; }
-    div[data-baseweb="select"] { background-color: white !important; border-radius: 8px !important; }
-    div[data-baseweb="select"] * { color: #333 !important; }
+    .stSelectbox label, .stMultiSelect label, .stTextInput label, .stRadio label { 
+        color: #475569 !important; /* Slate 600 */
+        font-size: 0.9rem !important; 
+        font-weight: 600 !important;
+    }
+    div[data-baseweb="select"] { 
+        background-color: #f8fafc !important; 
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 0.75rem !important; 
+    }
+    div[data-baseweb="select"]:hover { border-color: #94a3b8 !important; }
+    div[data-baseweb="select"] * { color: #0f172a !important; }
+    
+    /* Text Input */
+    input[type="text"] {
+        background-color: #f8fafc !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 0.75rem !important;
+    }
+    input[type="text"]:focus {
+        border-color: #3b82f6 !important; /* Blue 500 */
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+    }
     
     /* Horizontal Legend */
     .legend-container {
         display: flex;
         justify-content: center;
-        gap: 40px;
+        gap: 32px;
         margin: 20px 0;
-        padding: 15px;
+        padding: 16px;
+        background: #ffffff;
+        border-radius: 1rem;
+        border: 1px solid #e2e8f0;
         flex-wrap: wrap;
     }
-    .legend-item { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 0.95rem; }
-    .dot { height: 15px; width: 15px; border-radius: 50%; display: inline-block; }
+    .legend-item { 
+        display: flex; 
+        align-items: center; 
+        gap: 8px; 
+        font-weight: 600; 
+        font-size: 0.9rem; 
+        color: #475569; 
+    }
+    .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; }
     
     /* Search Button Valid Styling */
     div[data-testid="stFormSubmitButton"] button {
-        background: linear-gradient(135deg, #29B6F6 0%, #0288D1 100%) !important;
+        background-color: #2563eb !important; /* Blue 600 */
         color: white !important;
-        border-radius: 25px !important;
+        border-radius: 0.75rem !important;
         border: none !important;
-        padding: 0.6rem 2rem !important;
-        font-size: 1.1rem !important;
-        box-shadow: 0 4px 15px rgba(2, 136, 209, 0.4) !important;
-        transition: transform 0.2s, box-shadow 0.2s !important;
+        padding: 0.5rem 1.5rem !important;
+        font-size: 1rem !important;
+        font-weight: 700 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        transition: all 0.2s !important;
         width: 100%;
     }
     div[data-testid="stFormSubmitButton"] button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(2, 136, 209, 0.6) !important;
+        background-color: #1d4ed8 !important; /* Blue 700 */
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
     }
 
     /* Generic Button Styling */
     .stButton button {
-        border-radius: 8px !important;
+        border-radius: 0.75rem !important;
+        border: 1px solid #e2e8f0 !important;
+        color: #475569 !important;
+        background-color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    .stButton button:hover {
+        border-color: #cbd5e1 !important;
+        background-color: #f8fafc !important;
+        color: #0f172a !important;
     }
 
+    /* Maps & Dataframes */
+    iframe { border-radius: 1.5rem !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    div[data-testid="stDataFrame"] { border-radius: 1rem !important; overflow: hidden !important; border: 1px solid #e2e8f0 !important; }
+
     /* Hide Sidebar elements if any */
-    [data-testid="stSidebar"] { background-color: #050A18 !important; }
+    [data-testid="stSidebar"] { background-color: #ffffff !important; border-left: 1px solid #e2e8f0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
